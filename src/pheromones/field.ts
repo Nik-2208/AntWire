@@ -189,9 +189,20 @@ export class PheromoneField {
     }
   }
 
+  public getMaxConcentration(): number {
+    let max = 0;
+    for (let c = 0; c < this.channels.length; c++) {
+      const arr = this.channels[c];
+      for (let i = 0; i < arr.length; i++) {
+        if (arr[i] > max) max = arr[i];
+      }
+    }
+    return max;
+  }
+
   public clear(): void {
-    this.channels[0].fill(0);
-    this.channels[1].fill(0);
-    this.channels[2].fill(0);
+    for (let c = 0; c < this.channels.length; c++) {
+      this.channels[c].fill(0);
+    }
   }
 }

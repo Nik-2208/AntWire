@@ -106,12 +106,10 @@ export class RuleBasedController implements AntController {
 
       action = ActionFactory.move(1.0, steerAngle);
 
-      // If carrying food, deposit recruitment food pheromone on the trail!
+      // If carrying food, homing return navigation (recruitment deposition is evaluated by PheromoneDecisionEngine)
       if (internalState.carryingFoodAmount > 0) {
-        action.depositPheromoneType = PheromoneChannel.FOOD_TRAIL;
-        action.depositPheromoneStrength = 0.8;
-        humanReason = 'Returning to nest with food cargo while laying a chemical recruitment trail for sister workers.';
-        techReason = `homingDrive=${drives.homing.toFixed(2)}, nestAngle=${sensors.nestOdorDirection.toFixed(2)} rad -> steer ${steerAngle.toFixed(2)} rad, deposit FOOD_TRAIL`;
+        humanReason = 'Returning to nest with food cargo; recruitment trail deposition evaluated contextually by PheromoneDecisionEngine.';
+        techReason = `homingDrive=${drives.homing.toFixed(2)}, nestAngle=${sensors.nestOdorDirection.toFixed(2)} rad -> steer ${steerAngle.toFixed(2)} rad`;
       } else {
         humanReason = 'Critically low on energy; returning to nest to feed.';
         techReason = `energy=${(internalState.energy * 100).toFixed(0)}%, homingDrive=${drives.homing.toFixed(2)} -> steer ${steerAngle.toFixed(2)} rad`;

@@ -35,7 +35,8 @@ export type SimulationEventType =
   | 'SYMBIOSIS_INTERACTION'
   | 'COLONY_CREATED'
   | 'TASK_COMPLETED'
-  | 'REWARD_EVENT';
+  | 'REWARD_EVENT'
+  | 'ANOMALY_DETECTED';
 
 export interface SimulationEvent {
   id: string;

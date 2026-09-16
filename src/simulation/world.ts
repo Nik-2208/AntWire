@@ -19,6 +19,7 @@ import { SimulationEventBus } from './events';
 import { ColonyFoodLedger } from './food_ledger';
 import { TrajectoryLogger } from '../learning/trajectory_logger';
 import { CollectiveStructureManager } from './collective_structures';
+import { BehavioralSanityChecker } from './behavioral_sanity_checker';
 
 export interface WorldConfig {
   seed: number;
@@ -59,6 +60,7 @@ export class SimulationWorld {
   public collectiveStructures: CollectiveStructureManager = new CollectiveStructureManager();
   public foodLedger: ColonyFoodLedger = new ColonyFoodLedger();
   public trajectoryLogger: TrajectoryLogger = new TrajectoryLogger();
+  public sanityChecker: BehavioralSanityChecker = new BehavioralSanityChecker();
 
   // Telemetry event logs
   public eventLogs: SimulationEventLog[] = [];
@@ -475,6 +477,9 @@ export class SimulationWorld {
     const foodStored = this.colonies.reduce((sum, c) => sum + c.foodStore, 0);
     this.foodLedger.computeBalance(foodRemainingWorld, foodCarried, foodStored, simTime);
 
+    // 9.5 Run authoritative behavioral sanity checks (explosions, circling, reward farming)
+    this.sanityChecker.checkSimulationState(allAnts, this.pheromones, simTime, dt, this.eventBus);
+
     // 10. Advance simulation clock
     this.clock.stepOnce();
   }
@@ -488,6 +493,7 @@ export class SimulationWorld {
     }
     this.rng = new SeededRNG(this.config.seed);
     this.clock.reset();
+    this.sanityChecker.reset();
     this.initializeWorld();
   }
 

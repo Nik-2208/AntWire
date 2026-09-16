@@ -18,6 +18,7 @@ import { ColonyNeedsContext } from '../ants/task_system';
 import { ColonyCommunicationBus } from './communication';
 import { CollaborativeTaskManager } from './collaborative_tasks';
 import { AuthoritativeRewardEngine } from '../simulation/authoritative_reward_engine';
+import { PheromoneDecisionEngine } from '../ants/pheromone_decision';
 
 export interface FoodFlowEdge {
   id: string;
@@ -238,7 +239,7 @@ export class Colony {
     const antPositions = new Map(this.ants.map((a) => [a.id, a.body.position]));
     const coopRewards = this.collaborativeTasks.update(dt, simTime, livingAntIds, antPositions);
     for (const rew of coopRewards) {
-      this.rewardEngine.emitReward(
+      const applied = this.rewardEngine.emitReward(
         rew.antId,
         rew.eventType,
         rew.action,
@@ -251,6 +252,18 @@ export class Colony {
         rew.teamSuccess,
         eventBus
       );
+      if (applied) {
+        const targetAnt = this.ants.find((a) => a.id === rew.antId);
+        if (targetAnt) {
+          targetAnt.neuromodulator.processReinforcementEvent(
+            applied.value,
+            0.0,
+            0.95,
+            applied.reason,
+            simTime
+          );
+        }
+      }
     }
     this.rewardEngine.cleanup(simTime);
 
@@ -418,6 +431,29 @@ export class Colony {
         }
 
         ant.memory.totalTripsCompleted++;
+        PheromoneDecisionEngine.onTaskCompleted(ant.pheromoneState);
+        const delivReward = this.rewardEngine.emitReward(
+          ant.id,
+          'COMPLETION',
+          'DEPOSIT_FOOD',
+          'SUCCESS',
+          8.0,
+          'Delivered food cargo to colony storage chamber.',
+          simTime,
+          'RETURNING_TO_NEST',
+          1.0,
+          undefined,
+          eventBus
+        );
+        if (delivReward) {
+          ant.neuromodulator.processReinforcementEvent(
+            delivReward.value,
+            0.0,
+            0.95,
+            delivReward.reason,
+            simTime
+          );
+        }
         ant.taskSystem.completeTask(simTime);
         ant.body.task = 'IDLE_REASSESS';
 

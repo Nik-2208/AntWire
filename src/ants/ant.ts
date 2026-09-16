@@ -20,6 +20,9 @@ import { AntRoleState } from '../colony/roles';
 import { ColonyCommunicationBus } from '../colony/communication';
 import { CollaborativeTaskManager } from '../colony/collaborative_tasks';
 import { AuthoritativeRewardEngine } from '../simulation/authoritative_reward_engine';
+import { AntSpeciesProfile, DEFAULT_SPECIES_PROFILE } from './species_profile';
+import { AntPheromoneDecisionState, PheromoneDecisionEngine } from './pheromone_decision';
+import { NeuromodulatorSystem } from '../learning/neuromodulation';
 
 export class Ant {
   public id: string;
@@ -32,6 +35,9 @@ export class Ant {
   public controller: AntController;
   public taskSystem: TaskSystem;
   public roleState: AntRoleState;
+  public speciesProfile: AntSpeciesProfile;
+  public pheromoneState: AntPheromoneDecisionState;
+  public readonly neuromodulator: NeuromodulatorSystem;
 
   // History & telemetry buffers
   public lastAction: AntAction;
@@ -47,7 +53,8 @@ export class Ant {
     caste: AntCaste = 'WORKER',
     traits?: Partial<IndividualTraits>,
     controller?: AntController,
-    primaryRole: WorkerRole = 'FORAGER'
+    primaryRole: WorkerRole = 'FORAGER',
+    speciesProfile?: AntSpeciesProfile
   ) {
     this.id = id;
     this.colonyId = colonyId;
@@ -64,6 +71,9 @@ export class Ant {
       roleSwitchCooldown: 0,
       minimumRoleDuration: 20.0,
     };
+    this.speciesProfile = speciesProfile || DEFAULT_SPECIES_PROFILE;
+    this.pheromoneState = PheromoneDecisionEngine.createDefaultState(this.speciesProfile);
+    this.neuromodulator = new NeuromodulatorSystem();
 
     this.lastAction = { type: 'STOP' };
   }
@@ -243,52 +253,75 @@ export class Ant {
       this.memory.rememberThreat(this.body.position);
     }
 
-    // 6. POLICY DECISION EXECUTION
-    let actionToExecute: AntAction;
+    // 5.5 NEUROMODULATORY DECAY TOWARD TONIC EQUILIBRIUM
+    this.neuromodulator.updateDecay(dt, simTime);
+
+    // 6. POLICY DECISION EXECUTION WITH ROBUST FAILURE ISOLATION
+    let actionToExecute: AntAction = { type: 'STOP' };
     let decisionRecord: DecisionRecord;
 
-    if (taskResult.actionOverride) {
-      actionToExecute = taskResult.actionOverride;
-      decisionRecord = {
-        id: `${this.id}-${tick}`,
-        antId: this.id,
-        timestamp: simTime,
-        tick,
-        sensorySnapshot: { ...sensorySnapshot },
-        internalState: { ...this.internalState.state },
-        drives: { ...drivesVector },
-        selectedAction: actionToExecute,
-        dominantDrive: 'Task Override',
-        dominantDriveValue: 1.0,
-        confidence: 0.99,
-        humanReason: 'Executing direct task intervention / unstuck maneuver.',
-        technicalExplanation: `Task state machine override: ${this.taskSystem.state.currentTask}`,
-      };
-    } else {
-      const { action, record } = this.controller.decide(
-        this.id,
-        simTime,
-        tick,
-        this.body,
-        sensorySnapshot,
-        this.internalState.state,
-        drivesVector,
-        this.memory,
-        rng
-      );
-      actionToExecute = action;
-      decisionRecord = record;
-    }
+    try {
+      if (taskResult.actionOverride) {
+        actionToExecute = taskResult.actionOverride;
+        decisionRecord = {
+          id: `${this.id}-${tick}`,
+          antId: this.id,
+          timestamp: simTime,
+          tick,
+          sensorySnapshot: { ...sensorySnapshot },
+          internalState: { ...this.internalState.state },
+          drives: { ...drivesVector },
+          selectedAction: actionToExecute,
+          dominantDrive: 'Task Override',
+          dominantDriveValue: 1.0,
+          confidence: 0.99,
+          humanReason: 'Executing direct task intervention / unstuck maneuver.',
+          technicalExplanation: `Task state machine override: ${this.taskSystem.state.currentTask}`,
+        };
+      } else {
+        const { action, record } = this.controller.decide(
+          this.id,
+          simTime,
+          tick,
+          this.body,
+          sensorySnapshot,
+          this.internalState.state,
+          drivesVector,
+          this.memory,
+          rng
+        );
+        actionToExecute = action;
+        decisionRecord = record;
+      }
 
-    this.lastAction = actionToExecute;
-    this.latestDecision = decisionRecord;
-    this.recentDecisions.push(decisionRecord);
-    if (this.recentDecisions.length > this.maxDecisionHistory) {
-      this.recentDecisions.shift();
-    }
+      this.lastAction = actionToExecute;
+      this.latestDecision = decisionRecord;
+      this.recentDecisions.push(decisionRecord);
+      if (this.recentDecisions.length > this.maxDecisionHistory) {
+        this.recentDecisions.shift();
+      }
 
-    // 7. MOTOR & BEHAVIORAL INTERVENTIONS
-    this.executeAction(actionToExecute, dt, pheromones, foodEntities, nestEntrance, nestRadius, config, eventBus, simTime);
+      // 7. MOTOR & BEHAVIORAL INTERVENTIONS
+      this.executeAction(actionToExecute, dt, pheromones, foodEntities, nestEntrance, nestRadius, config, eventBus, simTime, activeColonyNeeds);
+    } catch (err: any) {
+      // Individual ant inference failure isolation: isolate to RECOVERING state without terminating colony
+      console.warn(`[AntWire Failure Isolation] Ant ${this.id} encountered an inference/action error:`, err?.message || err);
+      this.taskSystem.setTask('RECOVER', simTime, 'HIGH', 10.0);
+      this.taskSystem.transitionLifecycle('RECOVERING', this.id);
+      this.body.task = 'RECOVER';
+      this.body.speed = 0;
+      this.body.isMoving = false;
+      this.lastAction = { type: 'STOP' };
+      if (eventBus) {
+        eventBus.emit({
+          type: 'ANOMALY_DETECTED',
+          timestamp: simTime,
+          entityId: this.id,
+          colonyId: this.colonyId,
+          message: `Ant ${this.id} entered RECOVERING state after isolated inference/action error.`,
+        });
+      }
+    }
 
     // 8. BOUNDARY CONSTRAINTS
     this.body.clampToWorld(worldHalfW, worldHalfH);
@@ -303,7 +336,8 @@ export class Ant {
     nestRadius: number,
     config?: SimulationConfig,
     eventBus?: SimulationEventBus,
-    simTime: number = 0
+    simTime: number = 0,
+    colonyNeeds?: ColonyNeedsContext
   ): void {
     let speedMult = action.speedMultiplier !== undefined ? action.speedMultiplier : 1.0;
     const turnAngle = action.turnAngle !== undefined ? action.turnAngle : 0.0;
@@ -315,13 +349,23 @@ export class Ant {
     // Kinematic translation and rotation
     this.body.updateMotion(dt, speedMult, turnAngle);
 
-    // Chemical Deposition
-    if (action.depositPheromoneType !== undefined && action.depositPheromoneStrength) {
+    // Chemical Deposition via Authoritative Context-Aware Decision Engine
+    const pheroDecision = PheromoneDecisionEngine.evaluateDeposition(
+      this.body,
+      this.sensors.lastSnapshot,
+      this.internalState.state,
+      colonyNeeds,
+      this.pheromoneState,
+      this.speciesProfile,
+      simTime
+    );
+
+    if (pheroDecision.shouldDeposit && pheroDecision.channel !== undefined && pheroDecision.strength > 0) {
       pheromones.deposit(
         this.body.position.x,
         this.body.position.y,
-        action.depositPheromoneType,
-        action.depositPheromoneStrength * dt * 5.0
+        pheroDecision.channel,
+        pheroDecision.strength * dt * 5.0
       );
     }
 
@@ -352,7 +396,7 @@ export class Ant {
                 this.taskSystem.setTask('RETURNING_TO_NEST', simTime, 'HIGH', 30.0);
                 this.body.task = 'RETURNING_TO_NEST';
 
-                AuthoritativeRewardEngine.getInstance().emitReward(
+                const rewardEvent = AuthoritativeRewardEngine.getInstance().emitReward(
                   this.id,
                   'ACTION',
                   'COLLECT_FOOD',
@@ -365,6 +409,16 @@ export class Ant {
                   undefined,
                   eventBus
                 );
+
+                if (rewardEvent) {
+                  this.neuromodulator.processReinforcementEvent(
+                    rewardEvent.value,
+                    0.0,
+                    0.95,
+                    rewardEvent.reason,
+                    simTime
+                  );
+                }
 
                 if (eventBus) {
                   eventBus.emit({
@@ -406,7 +460,7 @@ export class Ant {
         );
         if (distToNest <= nestRadius + 0.8 && this.internalState.state.carryingFoodAmount > 0) {
           // Food is deposited and handled by Colony.update loop for strict conservation
-          AuthoritativeRewardEngine.getInstance().emitReward(
+          const rewardEvent = AuthoritativeRewardEngine.getInstance().emitReward(
             this.id,
             'COMPLETION',
             'DEPOSIT_FOOD',
@@ -419,6 +473,15 @@ export class Ant {
             undefined,
             eventBus
           );
+          if (rewardEvent) {
+            this.neuromodulator.processReinforcementEvent(
+              rewardEvent.value,
+              0.0,
+              0.95,
+              rewardEvent.reason,
+              simTime
+            );
+          }
           this.taskSystem.completeTask(simTime);
           this.body.task = 'IDLE_REASSESS';
         }

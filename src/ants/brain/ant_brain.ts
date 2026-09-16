@@ -358,10 +358,7 @@ export class BiologicallyInformedAntBrain {
       const deltaAngle = this.wrapAngle(cx.homeVectorHeading - body.heading);
       steerAngle = Math.max(-1.5, Math.min(1.5, deltaAngle * 1.3));
       forwardThrust = 1.0;
-      if (!this.ablationFlags.withoutPheromones) {
-        pheroToDeposit = PheromoneChannel.FOOD_TRAIL;
-        pheroStrength = 0.85;
-      }
+      // Recruitment trail deposition evaluated authoritative via PheromoneDecisionEngine in organism execution
       neuralReason = `Path integration home vector active: distance=${cx.homeVectorDistance.toFixed(1)}m, steering toward ${cx.homeVectorHeading.toFixed(2)} rad`;
       this.lastActiveSignalPath = this.graph.findShortestPath('CX-FB-VECTOR-X', 'T1-CPG-PROPULSION');
     }
