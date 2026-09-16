@@ -98,13 +98,110 @@ export type WorkerRole =
   | 'GENERAL_WORKER'
   | 'REPRODUCTIVE';
 
+/**
+ * Explicit 13 Ant Lifecycle & State Machine States.
+ * Enforces validated transitions with no contradictory or undefined states.
+ */
+export type AntLifecycleState =
+  | 'INITIALIZING'
+  | 'IDLE'
+  | 'EXPLORING'
+  | 'EVALUATING'
+  | 'TASK_CLAIMED'
+  | 'MOVING'
+  | 'WORKING'
+  | 'COMMUNICATING'
+  | 'HELPING'
+  | 'BLOCKED'
+  | 'RECOVERING'
+  | 'COMPLETED'
+  | 'FAILED';
+
 export type TaskLifecycleState =
   | 'NOT_STARTED'
   | 'ACTIVE'
   | 'PAUSED'
   | 'COMPLETED'
   | 'FAILED'
-  | 'ABANDONED';
+  | 'ABANDONED'
+  | 'PENDING'
+  | 'CLAIMED'
+  | 'IN_PROGRESS'
+  | 'WAITING'
+  | 'RELEASED'
+  | 'EXPIRED';
+
+export type CommunicationMessageType =
+  | 'RESOURCE_FOUND'
+  | 'TASK_AVAILABLE'
+  | 'TASK_CLAIMED'
+  | 'TASK_RELEASED'
+  | 'RECRUIT_REQUEST'
+  | 'HELP_REQUEST'
+  | 'HELP_ACCEPT'
+  | 'HELP_REJECT'
+  | 'PATH_FOUND'
+  | 'PATH_BLOCKED'
+  | 'DANGER'
+  | 'STATUS'
+  | 'TASK_PROGRESS'
+  | 'TASK_COMPLETE';
+
+export interface StructuredAntMessage {
+  messageId: string;
+  senderId: string;
+  receiverId: string | 'BROADCAST';
+  type: CommunicationMessageType;
+  payload: Record<string, any>;
+  timestamp: number;
+  ttl: number; // Time-to-live in seconds
+  strength: number; // Signal intensity [0, 1]
+  location?: Vector2D;
+}
+
+export type BaselineControllerType =
+  | 'RANDOM'
+  | 'RULE_BASED'
+  | 'GREEDY'
+  | 'SINGLE_AGENT'
+  | 'COLLABORATIVE';
+
+export type ExperimentAblationType =
+  | 'NO_LEARNING'
+  | 'NO_PHEROMONE'
+  | 'NO_COMMUNICATION'
+  | 'NO_RECRUITMENT'
+  | 'NO_COLLABORATION'
+  | 'NO_SHARED_INFORMATION'
+  | 'FULL_SYSTEM';
+
+export interface AuthoritativeRewardEvent {
+  rewardEventId: string;
+  antId: string;
+  taskId?: string;
+  timestamp: number;
+  eventType: 'DISCOVERY' | 'ACTION' | 'PROGRESS' | 'RETURN' | 'COMPLETION' | 'COMMUNICATION' | 'COOPERATION' | 'PENALTY' | 'COLLISION' | 'TIMEOUT';
+  action: string;
+  result: string;
+  value: number;
+  reason: string;
+  individualContribution: number;
+  teamSuccess?: number;
+}
+
+export interface NeuralStreamEvent {
+  eventId: string;
+  timestamp: number;
+  antId: string;
+  preNeuronId: string;
+  postNeuronId: string;
+  synapseId: string;
+  eventType: 'SPIKE' | 'TRANSMISSION' | 'PLASTICITY_STDP' | 'NEUROMODULATION' | 'INHIBITION';
+  weight: number;
+  delay: number;
+  activity: number;
+  state: string;
+}
 
 export type TaskPriority = 'CRITICAL' | 'HIGH' | 'NORMAL' | 'LOW';
 

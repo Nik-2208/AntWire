@@ -59,25 +59,34 @@ export class AntBody {
   }
 
   public updateMotion(dt: number, forwardThrottle: number, turnThrottle: number): void {
-    // Update heading
-    const turnAmount = turnThrottle * this.traits.turnSpeed * dt;
+    // Clamp throttles to valid ranges
+    const clampedThrottle = isNaN(forwardThrottle) ? 0 : Math.max(-1.0, Math.min(1.0, forwardThrottle));
+    const clampedTurn = isNaN(turnThrottle) ? 0 : Math.max(-2.5, Math.min(2.5, turnThrottle));
+
+    // Damped heading update with max turn-rate limit to prevent high-frequency jitter
+    const maxTurnRate = this.traits.turnSpeed * 1.5;
+    const turnAmount = Math.max(-maxTurnRate * dt, Math.min(maxTurnRate * dt, clampedTurn * this.traits.turnSpeed * dt));
     this.heading = (this.heading + turnAmount) % (Math.PI * 2);
     if (this.heading < 0) this.heading += Math.PI * 2;
 
-    // Update velocity & position
-    const currentSpeed = forwardThrottle * this.traits.movementSpeed;
-    this.speed = currentSpeed;
-    this.isMoving = Math.abs(currentSpeed) > 0.05;
+    // Smoothed velocity calculation
+    const targetSpeed = clampedThrottle * this.traits.movementSpeed;
+    const accelRate = 12.0; // m/s^2 smooth transition
+    this.speed += (targetSpeed - this.speed) * Math.min(1.0, accelRate * dt);
+    this.isMoving = Math.abs(this.speed) > 0.05;
 
-    this.velocity.x = Math.cos(this.heading) * currentSpeed;
-    this.velocity.y = Math.sin(this.heading) * currentSpeed;
+    this.velocity.x = Math.cos(this.heading) * this.speed;
+    this.velocity.y = Math.sin(this.heading) * this.speed;
 
-    this.position.x += this.velocity.x * dt;
-    this.position.y += this.velocity.y * dt;
+    // Guard against NaN
+    if (!isNaN(this.velocity.x) && !isNaN(this.velocity.y)) {
+      this.position.x += this.velocity.x * dt;
+      this.position.y += this.velocity.y * dt;
+    }
 
     // Advance tripod gait cycle for 3D animation
     if (this.isMoving) {
-      this.gaitPhase = (this.gaitPhase + currentSpeed * dt * 4.0) % (Math.PI * 2);
+      this.gaitPhase = (this.gaitPhase + Math.abs(this.speed) * dt * 4.0) % (Math.PI * 2);
     }
   }
 

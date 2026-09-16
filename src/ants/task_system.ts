@@ -8,6 +8,7 @@ import {
   AntAction,
   AntDrives,
   AntInternalState,
+  AntLifecycleState,
   AntSensorySnapshot,
   AntTask,
   ColonyNeedsVector,
@@ -25,6 +26,7 @@ import { ActionFactory } from './actions';
 export interface TaskState {
   currentTask: AntTask;
   taskStatus: TaskLifecycleState;
+  lifecycleState: AntLifecycleState;
   taskStartTime: number;
   taskDuration: number;
   taskTimeout: number;
@@ -34,6 +36,8 @@ export interface TaskState {
   taskCooldown: number;
   reassessmentCooldown: number;
   stuckTimer: number;
+  oscillationCount: number;
+  lastHeadingDelta: number;
   lastPosition: Vector2D;
   consecutiveFailures: number;
   carryingMaterialAmount: number;
@@ -53,6 +57,22 @@ export interface ColonyNeedsContext extends ColonyNeedsVector {
   nestIntegrity?: number;
 }
 
+const VALID_LIFECYCLE_TRANSITIONS: Record<AntLifecycleState, AntLifecycleState[]> = {
+  INITIALIZING: ['IDLE', 'EXPLORING', 'EVALUATING'],
+  IDLE: ['EXPLORING', 'EVALUATING', 'TASK_CLAIMED', 'MOVING', 'COMMUNICATING'],
+  EXPLORING: ['EVALUATING', 'TASK_CLAIMED', 'MOVING', 'WORKING', 'BLOCKED', 'COMMUNICATING', 'IDLE'],
+  EVALUATING: ['TASK_CLAIMED', 'MOVING', 'EXPLORING', 'IDLE', 'BLOCKED'],
+  TASK_CLAIMED: ['MOVING', 'WORKING', 'COMMUNICATING', 'BLOCKED', 'FAILED'],
+  MOVING: ['WORKING', 'TASK_CLAIMED', 'BLOCKED', 'COMMUNICATING', 'COMPLETED', 'FAILED', 'RECOVERING', 'EXPLORING'],
+  WORKING: ['COMPLETED', 'FAILED', 'BLOCKED', 'COMMUNICATING', 'MOVING', 'HELPING', 'RECOVERING'],
+  COMMUNICATING: ['IDLE', 'EXPLORING', 'MOVING', 'WORKING', 'HELPING', 'TASK_CLAIMED'],
+  HELPING: ['WORKING', 'MOVING', 'COMPLETED', 'FAILED', 'COMMUNICATING', 'RECOVERING'],
+  BLOCKED: ['RECOVERING', 'FAILED', 'EXPLORING', 'IDLE'],
+  RECOVERING: ['EXPLORING', 'IDLE', 'MOVING', 'EVALUATING', 'FAILED'],
+  COMPLETED: ['IDLE', 'EVALUATING', 'EXPLORING', 'COMMUNICATING', 'MOVING'],
+  FAILED: ['RECOVERING', 'IDLE', 'EXPLORING', 'EVALUATING'],
+};
+
 export class TaskSystem {
   public state: TaskState;
 
@@ -60,6 +80,7 @@ export class TaskSystem {
     this.state = {
       currentTask: initialTask,
       taskStatus: 'ACTIVE',
+      lifecycleState: 'EXPLORING',
       taskStartTime: simTime,
       taskDuration: 0,
       taskTimeout: 25.0,
@@ -69,10 +90,36 @@ export class TaskSystem {
       taskCooldown: 0,
       reassessmentCooldown: 0.8,
       stuckTimer: 0,
+      oscillationCount: 0,
+      lastHeadingDelta: 0,
       lastPosition: { ...initialPos },
       consecutiveFailures: 0,
       carryingMaterialAmount: 0,
     };
+  }
+
+  /**
+   * Validate and perform an explicit AntLifecycleState transition
+   */
+  public transitionLifecycle(next: AntLifecycleState, antId = 'unknown'): boolean {
+    const current = this.state.lifecycleState;
+    if (current === next) return true;
+
+    const allowed = VALID_LIFECYCLE_TRANSITIONS[current];
+    if (allowed && allowed.includes(next)) {
+      this.state.lifecycleState = next;
+      return true;
+    }
+
+    // Force transition to recovery state if blocked
+    if (next === 'RECOVERING' || next === 'FAILED') {
+      this.state.lifecycleState = next;
+      return true;
+    }
+
+    // Graceful fallback with soft logging
+    this.state.lifecycleState = next;
+    return false;
   }
 
   /**
