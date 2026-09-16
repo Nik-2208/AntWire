@@ -60,18 +60,38 @@ export class Brain3DViewer {
     // 5. Construct 3D Neuropils
     this.buildNeuropilAnatomy();
 
+    // Create radial canvas texture for bright white core + glowing halo particle
+    const signalCanvas = document.createElement('canvas');
+    signalCanvas.width = 64;
+    signalCanvas.height = 64;
+    const ctx = signalCanvas.getContext('2d');
+    if (ctx) {
+      const grad = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+      grad.addColorStop(0, 'rgba(255, 255, 255, 1.0)');
+      grad.addColorStop(0.25, 'rgba(255, 255, 255, 0.9)');
+      grad.addColorStop(0.55, 'rgba(56, 189, 248, 0.6)');
+      grad.addColorStop(1.0, 'rgba(56, 189, 248, 0.0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 64, 64);
+    }
+    const signalTex = new THREE.CanvasTexture(signalCanvas);
+
     // 6. Signal Pulses (Animated Neural Axons)
     this.particlePositions = new Float32Array(this.particleCount * 3);
     const particleGeo = new THREE.BufferGeometry();
     particleGeo.setAttribute('position', new THREE.BufferAttribute(this.particlePositions, 3));
     const particleMat = new THREE.PointsMaterial({
-      color: 0x38bdf8,
-      size: 0.18,
+      map: signalTex,
+      color: 0xffffff,
+      size: 0.22,
       transparent: true,
-      opacity: 0.85,
-      blending: THREE.NormalBlending,
+      opacity: 1.0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      depthTest: true,
     });
     this.signalParticles = new THREE.Points(particleGeo, particleMat);
+    this.signalParticles.renderOrder = 100;
     this.scene.add(this.signalParticles);
 
     // 7. Event Listeners & ResizeObserver

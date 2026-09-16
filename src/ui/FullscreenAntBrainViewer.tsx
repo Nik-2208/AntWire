@@ -36,6 +36,8 @@ import {
   RotateCw,
   ChevronLeft,
   ChevronRight,
+  GitCommit,
+  ArrowDown,
 } from 'lucide-react';
 
 interface FullscreenAntBrainViewerProps {
@@ -45,6 +47,27 @@ interface FullscreenAntBrainViewerProps {
 
 export type SynapseTypeFilter = 'ALL' | 'EXCITATORY' | 'INHIBITORY' | 'MODULATORY';
 export type CameraPreset = 'ANTERIOR' | 'DORSAL' | 'LATERAL_L' | 'LATERAL_R' | 'VENTRAL' | 'ISOMETRIC';
+
+const createSignalParticleTexture = (): THREE.CanvasTexture => {
+  const canvas = document.createElement('canvas');
+  canvas.width = 64;
+  canvas.height = 64;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    const grad = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+    grad.addColorStop(0.0, 'rgba(255, 255, 255, 1.0)');     // Intense White Core
+    grad.addColorStop(0.25, 'rgba(255, 255, 255, 0.95)');  // Core Margin
+    grad.addColorStop(0.5, 'rgba(224, 242, 254, 0.70)');   // Soft White Halo
+    grad.addColorStop(1.0, 'rgba(224, 242, 254, 0.0)');    // Smooth Fade
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(32, 32, 32, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.needsUpdate = true;
+  return texture;
+};
 
 export const FullscreenAntBrainViewer: React.FC<FullscreenAntBrainViewerProps> = ({
   brain: providedBrain,
@@ -325,20 +348,25 @@ export const FullscreenAntBrainViewer: React.FC<FullscreenAntBrainViewerProps> =
     synapseLinesRef.current = synapseLines;
     brainGroup.add(synapseLines);
 
-    // 9. Build Traveling Action Potential Pulse Particles
+    // 9. Build Traveling Action Potential Pulse Particles (White Core + Soft White Halo)
+    const signalTex = createSignalParticleTexture();
     const pulseGeo = new THREE.BufferGeometry();
     pulseGeomRef.current = pulseGeo;
     pulseGeo.setAttribute('position', new THREE.BufferAttribute(pulsePositionsRef.current, 3));
 
     const pulseMaterial = new THREE.PointsMaterial({
-      color: 0x38bdf8,
-      size: 0.08,
+      map: signalTex,
+      color: 0xffffff,
+      size: 0.18,
       transparent: true,
-      opacity: 0.95,
+      opacity: 1.0,
       blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      depthTest: true,
     });
 
     const pulsePoints = new THREE.Points(pulseGeo, pulseMaterial);
+    pulsePoints.renderOrder = 100;
     pulseParticlesRef.current = pulsePoints;
     brainGroup.add(pulsePoints);
 
@@ -504,8 +532,23 @@ export const FullscreenAntBrainViewer: React.FC<FullscreenAntBrainViewerProps> =
         for (let p = 0; p < pulsePacketCount; p++) {
           pulseProgressRef.current[p] += pulseSpeedRef.current[p];
           if (pulseProgressRef.current[p] >= 1.0) {
+            // Briefly flash target receiving neuron upon action potential arrival
+            const oldEdgeIdx = pulseEdgeIndexRef.current[p];
+            const oldDstId = brain.edgeTargets[oldEdgeIdx] || 0;
+            brain.activations[oldDstId] = Math.min(1.0, (brain.activations[oldDstId] || 0) + 0.85);
+
             pulseProgressRef.current[p] = 0;
-            pulseEdgeIndexRef.current[p] = Math.floor(Math.random() * edgeCount);
+            // Select edge prioritizing active pre-synaptic source neurons
+            let selectedEdge = Math.floor(Math.random() * edgeCount);
+            for (let attempt = 0; attempt < 8; attempt++) {
+              const cand = Math.floor(Math.random() * edgeCount);
+              const candSrc = brain.edgeSources[cand] || 0;
+              if (brain.activations[candSrc] > 0.15) {
+                selectedEdge = cand;
+                break;
+              }
+            }
+            pulseEdgeIndexRef.current[p] = selectedEdge;
           }
 
           const edgeIdx = pulseEdgeIndexRef.current[p];
@@ -956,6 +999,41 @@ export const FullscreenAntBrainViewer: React.FC<FullscreenAntBrainViewerProps> =
 
           {rightPanelOpen && (
             <div className="flex flex-col gap-2 max-h-[calc(100vh-140px)] overflow-y-auto no-scrollbar pr-0.5">
+              {/* Directional Neuropathway Flow Card */}
+              <div className="p-3 rounded-xl bg-slate-950/85 border border-slate-800/80 backdrop-blur-md shadow-2xl space-y-2 text-[11px]">
+                <div className="flex items-center justify-between text-slate-200 font-bold border-b border-slate-800/80 pb-1.5">
+                  <span className="flex items-center gap-1.5 text-cyan-300">
+                    <GitCommit className="w-3.5 h-3.5 text-cyan-400" /> Directional Neuropathway Flow
+                  </span>
+                  <span className="text-[9px] font-mono text-slate-400">6 Stages</span>
+                </div>
+                <div className="space-y-1">
+                  {[
+                    { stage: 'INPUT', label: 'Sensory Receptors (Antennae/Eyes)', color: 'border-emerald-500 text-emerald-400 bg-emerald-950/40' },
+                    { stage: 'SENSORY', label: 'Antennal & Optic Lobes (AL / OL)', color: 'border-cyan-500 text-cyan-400 bg-cyan-950/40' },
+                    { stage: 'PROCESSING', label: 'Mushroom Bodies (MB Kenyon Cells)', color: 'border-amber-500 text-amber-400 bg-amber-950/40' },
+                    { stage: 'DECISION', label: 'Central Complex (CX EB/FB Compass)', color: 'border-purple-500 text-purple-400 bg-purple-950/40' },
+                    { stage: 'MOTOR', label: 'Subesophageal Zone & LAL Motor', color: 'border-rose-500 text-rose-400 bg-rose-950/40' },
+                    { stage: 'OUTPUT', label: 'Thoracic CPG & Tripod Gait Action', color: 'border-indigo-500 text-indigo-400 bg-indigo-950/40' }
+                  ].map((item, idx, arr) => (
+                    <React.Fragment key={item.stage}>
+                      <div className={`p-1.5 rounded-lg border flex items-center justify-between font-mono ${item.color}`}>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[9px] font-bold px-1 py-0.2 bg-slate-900/80 rounded border border-current">{idx + 1}</span>
+                          <span className="font-bold text-[10px]">{item.stage}</span>
+                        </div>
+                        <span className="text-[9px] text-slate-300 font-sans truncate ml-2">{item.label}</span>
+                      </div>
+                      {idx < arr.length - 1 && (
+                        <div className="flex justify-center my-0.5">
+                          <ArrowDown className="w-3 h-3 text-cyan-400 shrink-0" />
+                        </div>
+                      )}
+                    </React.Fragment>
+                  ))}
+                </div>
+              </div>
+
               {/* Synaptic Density & Neurotransmitter Filter Card */}
               <div className="p-3 rounded-xl bg-slate-950/85 border border-slate-800/80 backdrop-blur-md shadow-2xl space-y-2.5 text-[11px]">
                 <div className="flex items-center justify-between text-slate-200 font-bold border-b border-slate-800/80 pb-1.5">

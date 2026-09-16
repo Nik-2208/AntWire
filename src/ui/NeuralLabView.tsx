@@ -60,6 +60,8 @@ import {
   Table,
   FileText,
   Maximize,
+  GitCommit,
+  ArrowDown,
 } from 'lucide-react';
 import * as THREE from 'three';
 
@@ -974,6 +976,41 @@ export const NeuralLabView: React.FC<NeuralLabViewProps> = ({ selectedAnt }) => 
             >
               Inject Phasic Dopamine Burst (+0.75)
             </button>
+          </div>
+
+          {/* Directional Neuropathway Flow Card */}
+          <div className="p-2.5 rounded bg-slate-900/90 border border-slate-800 space-y-1.5 text-[10px]">
+            <div className="flex items-center justify-between text-slate-200 font-bold border-b border-slate-800 pb-1">
+              <span className="flex items-center gap-1.5 text-cyan-300">
+                <GitCommit className="w-3.5 h-3.5 text-cyan-400" /> Directional Neuropathway Flow
+              </span>
+              <span className="text-[8px] font-mono text-slate-400">6 Stages</span>
+            </div>
+            <div className="space-y-1">
+              {[
+                { stage: 'INPUT', label: 'Sensory Receptors (Antennae/Eyes)', color: 'border-emerald-500 text-emerald-400 bg-emerald-950/40' },
+                { stage: 'SENSORY', label: 'Antennal & Optic Lobes (AL / OL)', color: 'border-cyan-500 text-cyan-400 bg-cyan-950/40' },
+                { stage: 'PROCESSING', label: 'Mushroom Bodies (MB Kenyon Cells)', color: 'border-amber-500 text-amber-400 bg-amber-950/40' },
+                { stage: 'DECISION', label: 'Central Complex (CX EB/FB Compass)', color: 'border-purple-500 text-purple-400 bg-purple-950/40' },
+                { stage: 'MOTOR', label: 'Subesophageal Zone & LAL Motor', color: 'border-rose-500 text-rose-400 bg-rose-950/40' },
+                { stage: 'OUTPUT', label: 'Thoracic CPG & Tripod Gait Action', color: 'border-indigo-500 text-indigo-400 bg-indigo-950/40' }
+              ].map((item, idx, arr) => (
+                <React.Fragment key={item.stage}>
+                  <div className={`p-1 rounded border flex items-center justify-between font-mono ${item.color}`}>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[8px] font-bold px-1 py-0.2 bg-slate-900/80 rounded border border-current">{idx + 1}</span>
+                      <span className="font-bold text-[9.5px]">{item.stage}</span>
+                    </div>
+                    <span className="text-[8.5px] text-slate-300 font-sans truncate ml-1">{item.label}</span>
+                  </div>
+                  {idx < arr.length - 1 && (
+                    <div className="flex justify-center my-0.5">
+                      <ArrowDown className="w-2.5 h-2.5 text-cyan-400 shrink-0" />
+                    </div>
+                  )}
+                </React.Fragment>
+              ))}
+            </div>
           </div>
         </div>
       </div>

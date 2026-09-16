@@ -10,6 +10,7 @@ import { Queen } from './queen';
 import { BroodManager } from './brood';
 import { NestStructure } from './nest';
 import { CauseOfDeath, ColonyControlMode, ColonyNeedsVector, ColonyStatus, Vector2D, WorkerRole } from '../simulation/types';
+import { Predator } from '../predators/predator';
 import { SeededRNG } from '../simulation/rng';
 import { SimulationConfig } from '../simulation/config';
 import { SimulationEventBus } from '../simulation/events';
@@ -228,12 +229,68 @@ export class Colony {
     temperatureCelsius: number = 24.0,
     ledger?: { recordConsumption: (amt: number) => void; recordLost: (amt: number) => void; recordTrophallaxis: (d: string, r: string, a: number, dr: number, rr: number, t: number) => void },
     onDropFood?: (pos: Vector2D, amount: number) => void,
-    foodClusters?: { position: Vector2D; amount: number }[]
+    foodClusters?: { position: Vector2D; amount: number }[],
+    predators?: Predator[]
   ): void {
     const cfg = config || SimulationConfig.instance;
 
     // 0. Update Distributed Superorganism Communication & Collaborative Tasks
     this.communicationBus.update(dt);
+
+    // 0.8 Soldier Combat & Queen Defense Ring Logic
+    if (predators && predators.length > 0) {
+      const activePredators = predators.filter((p) => p.state.health > 0);
+      const queenPos = this.queen.position;
+
+      const queenThreatPredator = activePredators.find((p) => {
+        const d = Math.hypot(p.state.position.x - queenPos.x, p.state.position.y - queenPos.y);
+        return d < 15.0;
+      });
+
+      for (const ant of this.ants) {
+        if (!ant.internalState.state.isAlive) continue;
+        const isDefender = ant.roleState.primaryRole === 'SOLDIER' || ant.roleState.primaryRole === 'GUARD';
+
+        if (queenThreatPredator && isDefender) {
+          const dx = ant.body.position.x - queenPos.x;
+          const dy = ant.body.position.y - queenPos.y;
+          const dist = Math.hypot(dx, dy);
+
+          if (dist > 3.0) {
+            ant.taskSystem.setTask('DEFEND', simTime, 'CRITICAL', 10.0);
+            ant.taskSystem.state.targetPosition = { ...queenPos };
+          }
+        }
+
+        if (isDefender || ant.body.task === 'DEFENDING' || ant.body.task === 'DEFEND') {
+          for (const pred of activePredators) {
+            const pdx = pred.state.position.x - ant.body.position.x;
+            const pdy = pred.state.position.y - ant.body.position.y;
+            const pdist = Math.hypot(pdx, pdy);
+
+            if (pdist < 1.8) {
+              const damageDealt = 0.35 * (ant.body.caste === 'MAJOR' || ant.body.caste === 'SOLDIER' ? 2.2 : 1.0) * dt;
+              pred.takeDamage(damageDealt);
+
+              this.rewardEngine.emitReward(
+                ant.id,
+                'ACTION',
+                'ATTACK_PREDATOR',
+                'SUCCESS',
+                5.0,
+                `Dealt ${damageDealt.toFixed(2)} damage to predator ${pred.id}`,
+                simTime,
+                'DEFEND',
+                1.0,
+                undefined,
+                eventBus
+              );
+              break;
+            }
+          }
+        }
+      }
+    }
 
     const livingAntIds = new Set(this.ants.filter((a) => a.internalState.state.isAlive).map((a) => a.id));
     const antPositions = new Map(this.ants.map((a) => [a.id, a.body.position]));

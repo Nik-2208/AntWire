@@ -423,7 +423,7 @@ export class SimulationWorld {
         }
       }
 
-      // Update colony superorganism dynamics (Queen, Brood, Food Storage, Subnests, Corpses)
+      // Update colony superorganism dynamics (Queen, Brood, Food Storage, Subnests, Corpses, Defense)
       colony.update(
         dt,
         simTime,
@@ -433,7 +433,8 @@ export class SimulationWorld {
         this.environment.config.temperatureCelsius,
         this.foodLedger,
         (pos, amt) => this.dropFoodEntity(pos, amt),
-        this.foodEntities.map((f) => ({ position: f.position, amount: f.amount }))
+        this.foodEntities.map((f) => ({ position: f.position, amount: f.amount })),
+        this.predators
       );
     }
 

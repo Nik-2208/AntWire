@@ -6,10 +6,16 @@
 
 export interface FoodLedgerSnapshot {
   foodSpawned: number;
-  foodRemainingWorld: number;
-  foodCarried: number;
+  foodDiscovered?: number;
+  foodCollected?: number;
+  foodInTransit?: number;
+  foodProcessed?: number;
   foodStored: number;
   foodConsumed: number;
+  foodReserved?: number;
+  foodWasted?: number;
+  foodRemainingWorld: number;
+  foodCarried: number;
   foodTransferred: number;
   foodLost: number;
   foodDecayed: number;
@@ -30,7 +36,14 @@ export interface TrophallaxisRecord {
 
 export class ColonyFoodLedger {
   public foodSpawned: number = 0;
+  public foodDiscovered: number = 0;
+  public foodCollected: number = 0;
+  public foodInTransit: number = 0;
+  public foodProcessed: number = 0;
+  public foodStored: number = 0;
   public foodConsumed: number = 0;
+  public foodReserved: number = 0;
+  public foodWasted: number = 0;
   public foodTransferred: number = 0;
   public foodLost: number = 0;
   public foodDecayed: number = 0;
@@ -127,12 +140,23 @@ export class ColonyFoodLedger {
       this.lastConservationCheck = timestamp;
     }
 
+    this.foodStored = foodStored;
+    this.foodInTransit = foodCarried;
+    this.foodReserved = Math.max(0, foodStored * 0.25);
+    this.foodWasted = this.foodLost + this.foodDecayed;
+
     const snapshot: FoodLedgerSnapshot = {
       foodSpawned: this.foodSpawned,
+      foodDiscovered: this.foodDiscovered,
+      foodCollected: this.foodCollected,
+      foodInTransit: this.foodInTransit,
+      foodProcessed: this.foodProcessed,
+      foodStored: this.foodStored,
+      foodConsumed: this.foodConsumed,
+      foodReserved: this.foodReserved,
+      foodWasted: this.foodWasted,
       foodRemainingWorld,
       foodCarried,
-      foodStored,
-      foodConsumed: this.foodConsumed,
       foodTransferred: this.foodTransferred,
       foodLost: this.foodLost,
       foodDecayed: this.foodDecayed,

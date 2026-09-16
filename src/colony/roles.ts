@@ -27,12 +27,21 @@ export interface RoleDistribution {
   reproductives: number;
 }
 
+export type RoleSwitchingPhase =
+  | 'ROLE_EVALUATION'
+  | 'ROLE_COMMITMENT'
+  | 'ROLE_EXECUTION'
+  | 'ROLE_REEVALUATION';
+
 export interface AntRoleState {
   primaryRole: WorkerRole;
+  switchingPhase?: RoleSwitchingPhase;
   roleDuration: number;
   roleSwitchCooldown: number;
   minimumRoleDuration: number;
   individualThresholds?: Record<string, number>; // theta_i,j for each task type
+  roleSwitchReason?: string;
+  learnedRoleSuccess?: number;
 }
 
 export const CASTE_MORPHOLOGY_TABLE: Record<AntCaste, CasteMorphologyTraits> = {
@@ -284,7 +293,15 @@ export class ColonyRoleManager {
       ant.roleState.roleDuration += dt;
       ant.roleState.roleSwitchCooldown = Math.max(0, ant.roleState.roleSwitchCooldown - dt);
 
+      // Default phase if unassigned
+      if (!ant.roleState.switchingPhase) {
+        ant.roleState.switchingPhase = 'ROLE_EXECUTION';
+      }
+
+      // Check if reevaluation is due
       if (ant.roleState.roleDuration >= ant.roleState.minimumRoleDuration && ant.roleState.roleSwitchCooldown <= 0) {
+        ant.roleState.switchingPhase = 'ROLE_EVALUATION';
+
         const casteTraits = CASTE_MORPHOLOGY_TABLE[ant.body.caste] || CASTE_MORPHOLOGY_TABLE.WORKER;
 
         // Age polyethism weighting: normalized age in colony
@@ -292,26 +309,39 @@ export class ColonyRoleManager {
         const insideBias = 1.0 - ageNorm * 0.5; // Younger favor inside
         const outsideBias = 0.5 + ageNorm * 0.7; // Older favor outside
 
-        const candidateRoles: { role: WorkerRole; affinity: number }[] = [
-          { role: 'FORAGER', affinity: demands.foodNeed * ant.body.traits.explorationTendency * outsideBias * casteTraits.leafCuttingEfficiency },
-          { role: 'LEAF_CUTTER', affinity: demands.foodNeed * outsideBias * casteTraits.leafCuttingEfficiency * 1.3 },
-          { role: 'SCOUT', affinity: demands.explorationNeed * ant.body.traits.movementSpeed * 0.25 * outsideBias },
-          { role: 'NURSE', affinity: demands.broodNeed * 1.3 * insideBias * casteTraits.broodCareAffinity },
-          { role: 'FUNGUS_GARDENER', affinity: demands.foodNeed * 1.2 * insideBias * casteTraits.fungusTendingAffinity },
-          { role: 'LEAF_PROCESSOR', affinity: demands.foodNeed * 1.1 * insideBias * (casteTraits.caste === 'MINOR' ? 2.0 : 1.0) },
-          { role: 'BUILDER', affinity: demands.nestNeed * 1.2 * insideBias },
-          { role: 'GUARD', affinity: demands.defenseNeed * ant.body.traits.fearThreshold * 1.3 * casteTraits.defenseAffinity },
-          { role: 'MIDDEN_WORKER', affinity: demands.sanitationNeed * 1.3 * (casteTraits.caste === 'MINOR' || casteTraits.caste === 'WORKER' ? 1.5 : 0.8) },
-          { role: 'SANITATION', affinity: demands.sanitationNeed * 1.1 },
+        const candidateRoles: { role: WorkerRole; affinity: number; reason: string }[] = [
+          { role: 'FORAGER', affinity: demands.foodNeed * ant.body.traits.explorationTendency * outsideBias * casteTraits.leafCuttingEfficiency, reason: 'High colony food demand & age suitability' },
+          { role: 'LEAF_CUTTER', affinity: demands.foodNeed * outsideBias * casteTraits.leafCuttingEfficiency * 1.3, reason: 'High leaf harvesting demand' },
+          { role: 'SCOUT', affinity: demands.explorationNeed * ant.body.traits.movementSpeed * 0.25 * outsideBias, reason: 'Colony territory expansion demand' },
+          { role: 'NURSE', affinity: demands.broodNeed * 2.5 * insideBias * casteTraits.broodCareAffinity, reason: 'High brood nursing demand & young age preference' },
+          { role: 'BROOD_CARE', affinity: demands.broodNeed * 2.0 * insideBias * casteTraits.broodCareAffinity, reason: 'Unattended egg/larva pressure' },
+          { role: 'FUNGUS_GARDENER', affinity: demands.foodNeed * 1.2 * insideBias * casteTraits.fungusTendingAffinity, reason: 'Substrate pulping & gongylidia cultivation demand' },
+          { role: 'GARDENER', affinity: demands.foodNeed * 1.1 * insideBias * casteTraits.fungusTendingAffinity, reason: 'Fungal garden maintenance demand' },
+          { role: 'LEAF_PROCESSOR', affinity: demands.foodNeed * 1.1 * insideBias * (casteTraits.caste === 'MINOR' ? 2.0 : 1.0), reason: 'Fresh leaf mastication demand' },
+          { role: 'BUILDER', affinity: demands.nestNeed * 1.2 * insideBias, reason: 'Chamber excavation & nest repair demand' },
+          { role: 'NEST_WORKER', affinity: demands.nestNeed * 1.0 * insideBias, reason: 'Internal nest gallery maintenance' },
+          { role: 'GUARD', affinity: demands.defenseNeed * ant.body.traits.fearThreshold * 1.3 * casteTraits.defenseAffinity, reason: 'Predator alarm or intruder threat' },
+          { role: 'SOLDIER', affinity: demands.defenseNeed * 1.6 * casteTraits.defenseAffinity, reason: 'High physical combat capacity & threat response' },
+          { role: 'MIDDEN_WORKER', affinity: demands.sanitationNeed * 1.3 * (casteTraits.caste === 'MINOR' || casteTraits.caste === 'WORKER' ? 1.5 : 0.8), reason: 'Corpse & waste removal demand' },
+          { role: 'WASTE_WORKER', affinity: demands.sanitationNeed * 1.2, reason: 'Refuse chamber sanitization demand' },
+          { role: 'RECRUITER', affinity: demands.foodNeed * 0.9 * outsideBias, reason: 'High quality food plume trail marking' },
+          { role: 'TRANSPORTER', affinity: demands.foodNeed * 1.0 * casteTraits.maxCargoCapacityUnits, reason: 'Heavy cargo hauling demand' },
+          { role: 'RESERVE', affinity: 0.15, reason: 'Colony energy conservation & resting' },
         ];
 
         candidateRoles.sort((a, b) => b.affinity - a.affinity);
-        const bestRole = candidateRoles[0].role;
+        const bestCandidate = candidateRoles[0];
 
-        if (bestRole !== ant.roleState.primaryRole && rng.chance(0.25)) {
-          ant.roleState.primaryRole = bestRole;
+        if (bestCandidate.role !== ant.roleState.primaryRole && rng.chance(0.65)) {
+          // ROLE_COMMITMENT -> ROLE_EXECUTION
+          ant.roleState.switchingPhase = 'ROLE_COMMITMENT';
+          ant.roleState.primaryRole = bestCandidate.role;
           ant.roleState.roleDuration = 0;
-          ant.roleState.roleSwitchCooldown = 10.0;
+          ant.roleState.roleSwitchCooldown = 12.0;
+          ant.roleState.roleSwitchReason = bestCandidate.reason;
+          ant.roleState.switchingPhase = 'ROLE_EXECUTION';
+        } else {
+          ant.roleState.switchingPhase = 'ROLE_EXECUTION';
         }
       }
     }
@@ -340,35 +370,39 @@ export class ColonyRoleManager {
         continue;
       }
       switch (ant.roleState.primaryRole) {
-        case 'FORAGER':
-          counts.foragers++;
-          break;
-        case 'LEAF_CUTTER':
-          counts.leafCutters++;
-          break;
-        case 'SCOUT':
-          counts.scouts++;
-          break;
         case 'NURSE':
+        case 'BROOD_CARE':
           counts.nurses++;
           break;
+        case 'SCOUT':
+        case 'EXPLORER':
+          counts.scouts++;
+          break;
+        case 'GUARD':
+        case 'SOLDIER':
+          counts.guards++;
+          break;
         case 'FUNGUS_GARDENER':
+        case 'GARDENER':
           counts.fungusGardeners++;
           break;
         case 'LEAF_PROCESSOR':
           counts.leafProcessors++;
           break;
         case 'BUILDER':
+        case 'NEST_WORKER':
           counts.builders++;
           break;
-        case 'GUARD':
-          counts.guards++;
-          break;
         case 'MIDDEN_WORKER':
-          counts.middenWorkers++;
-          break;
         case 'SANITATION':
+        case 'WASTE_WORKER':
           counts.sanitation++;
+          break;
+        case 'TRANSPORTER':
+        case 'FORAGER':
+        case 'LEAF_CUTTER':
+        case 'RECRUITER':
+          counts.foragers++;
           break;
         case 'HITCHHIKER':
           counts.hitchhikers++;

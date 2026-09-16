@@ -38,7 +38,7 @@ interface ColonyViewProps {
 export const ColonyView: React.FC<ColonyViewProps> = ({ world, onSelectAnt, onFocusCamera }) => {
   const colony = world.colonies[0];
   const stats = colony ? colony.getStatistics(world.clock.simTime) : null;
-  const [activeSubTab, setActiveSubTab] = useState<'CENSUS_NEEDS' | 'FOOD_FLOW_LAB' | 'NEST_GRAPH' | 'QUEEN_BROOD'>('CENSUS_NEEDS');
+  const [activeSubTab, setActiveSubTab] = useState<'CENSUS_NEEDS' | 'FOOD_FLOW_LAB' | 'ROLE_INSPECTOR' | 'NEST_GRAPH' | 'QUEEN_BROOD' | 'SOLDIER_DEFENSE' | 'BEHAVIOR_LOG'>('CENSUS_NEEDS');
   const [cutawayDepth, setCutawayDepth] = useState<number>(4.5);
 
   if (!colony || !stats) {
@@ -91,6 +91,8 @@ export const ColonyView: React.FC<ColonyViewProps> = ({ world, onSelectAnt, onFo
   const allChambers = colony.nest.getAllChambers ? colony.nest.getAllChambers() : colony.nest.chambers;
   const visibleChambers = allChambers.filter((c) => c.depth <= cutawayDepth);
 
+  const snap = world.foodLedger.getLatestSnapshot();
+
   return (
     <div className="flex flex-col gap-3 p-4 bg-slate-900/90 border border-slate-800 rounded-2xl text-slate-200 text-xs shadow-xl backdrop-blur-md overflow-y-auto max-h-[85vh]">
       {/* Title & Mode Switcher */}
@@ -100,7 +102,7 @@ export const ColonyView: React.FC<ColonyViewProps> = ({ world, onSelectAnt, onFo
           <div>
             <h2 className="text-sm font-bold font-heading text-slate-100">COLONY SUPERORGANISM LAB</h2>
             <p className="text-[10px] text-slate-400">
-              Species: <strong className="text-cyan-300 font-mono">Biologically Informed Experimental Ant</strong>
+              Species: <strong className="text-cyan-300 font-mono">{colony.ants[0]?.speciesProfile?.name || 'Leaf-cutter Ant (Modelled Profile)'}</strong>
             </p>
           </div>
         </div>
@@ -123,10 +125,10 @@ export const ColonyView: React.FC<ColonyViewProps> = ({ world, onSelectAnt, onFo
       </div>
 
       {/* Sub-Tab Navigation */}
-      <div className="flex items-center gap-1.5 bg-slate-950/70 p-1 rounded-xl border border-slate-800 text-[11px]">
+      <div className="flex items-center gap-1 bg-slate-950/70 p-1 rounded-xl border border-slate-800 text-[10px] flex-wrap">
         <button
           onClick={() => setActiveSubTab('CENSUS_NEEDS')}
-          className={`flex-1 py-1.5 rounded-lg font-bold transition-all ${
+          className={`px-2.5 py-1 rounded-lg font-bold transition-all ${
             activeSubTab === 'CENSUS_NEEDS'
               ? 'bg-cyan-600/40 text-cyan-300 border border-cyan-500/50 shadow-md'
               : 'text-slate-400 hover:text-white'
@@ -136,33 +138,63 @@ export const ColonyView: React.FC<ColonyViewProps> = ({ world, onSelectAnt, onFo
         </button>
         <button
           onClick={() => setActiveSubTab('FOOD_FLOW_LAB')}
-          className={`flex-1 py-1.5 rounded-lg font-bold transition-all ${
+          className={`px-2.5 py-1 rounded-lg font-bold transition-all ${
             activeSubTab === 'FOOD_FLOW_LAB'
               ? 'bg-emerald-600/40 text-emerald-300 border border-emerald-500/50 shadow-md'
               : 'text-slate-400 hover:text-white'
           }`}
         >
-          Food Flow Lab
+          Resource Flow
+        </button>
+        <button
+          onClick={() => setActiveSubTab('ROLE_INSPECTOR')}
+          className={`px-2.5 py-1 rounded-lg font-bold transition-all ${
+            activeSubTab === 'ROLE_INSPECTOR'
+              ? 'bg-indigo-600/40 text-indigo-300 border border-indigo-500/50 shadow-md'
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          Role Inspector
+        </button>
+        <button
+          onClick={() => setActiveSubTab('SOLDIER_DEFENSE')}
+          className={`px-2.5 py-1 rounded-lg font-bold transition-all ${
+            activeSubTab === 'SOLDIER_DEFENSE'
+              ? 'bg-rose-600/40 text-rose-300 border border-rose-500/50 shadow-md'
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          Soldiers & Defense
         </button>
         <button
           onClick={() => setActiveSubTab('NEST_GRAPH')}
-          className={`flex-1 py-1.5 rounded-lg font-bold transition-all ${
+          className={`px-2.5 py-1 rounded-lg font-bold transition-all ${
             activeSubTab === 'NEST_GRAPH'
               ? 'bg-amber-600/40 text-amber-300 border border-amber-500/50 shadow-md'
               : 'text-slate-400 hover:text-white'
           }`}
         >
-          Subterranean Nest
+          Nest Architecture
         </button>
         <button
           onClick={() => setActiveSubTab('QUEEN_BROOD')}
-          className={`flex-1 py-1.5 rounded-lg font-bold transition-all ${
+          className={`px-2.5 py-1 rounded-lg font-bold transition-all ${
             activeSubTab === 'QUEEN_BROOD'
               ? 'bg-purple-600/40 text-purple-300 border border-purple-500/50 shadow-md'
               : 'text-slate-400 hover:text-white'
           }`}
         >
           Queen & Brood
+        </button>
+        <button
+          onClick={() => setActiveSubTab('BEHAVIOR_LOG')}
+          className={`px-2.5 py-1 rounded-lg font-bold transition-all ${
+            activeSubTab === 'BEHAVIOR_LOG'
+              ? 'bg-blue-600/40 text-blue-300 border border-blue-500/50 shadow-md'
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          Behavior Log
         </button>
       </div>
 
@@ -535,6 +567,147 @@ export const ColonyView: React.FC<ColonyViewProps> = ({ world, onSelectAnt, onFo
                 <span className="text-slate-400 block text-[10px]">Pupae</span>
                 <span className="font-mono font-bold text-amber-500">{colony.brood.pupae}</span>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 5. ROLE INSPECTOR — WHY IS THIS ANT DOING THIS JOB? */}
+      {activeSubTab === 'ROLE_INSPECTOR' && (
+        <div className="flex flex-col gap-3">
+          <div className="bg-slate-950/70 p-3 rounded-xl border border-indigo-500/30 flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-indigo-300 text-xs flex items-center gap-1.5">
+                <Sliders className="w-4 h-4 text-indigo-400" /> Worker Role Inspector & Task Switch Rationale
+              </span>
+              <span className="text-[9px] font-mono text-indigo-400 bg-indigo-950 px-2 py-0.5 rounded border border-indigo-800">
+                {colony.ants.length} Active Organisms
+              </span>
+            </div>
+            <p className="text-[10px] text-slate-400">
+              Task switching follows temporal pipeline: <strong className="text-indigo-300">ROLE_EVALUATION → ROLE_COMMITMENT → ROLE_EXECUTION → ROLE_REEVALUATION</strong>.
+            </p>
+
+            <div className="flex flex-col gap-2 max-h-64 overflow-y-auto pr-1">
+              {colony.ants.map((ant) => {
+                const snap = ant.getFullOrganismSnapshot();
+                return (
+                  <div
+                    key={ant.id}
+                    onClick={() => onSelectAnt(ant.id)}
+                    className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 hover:border-indigo-500/50 cursor-pointer transition-all flex flex-col gap-1 text-[11px]"
+                  >
+                    <div className="flex items-center justify-between font-mono">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-slate-100">{ant.id}</span>
+                        <span className="px-1.5 py-0.2 rounded bg-indigo-950 text-indigo-300 font-bold text-[9px] border border-indigo-800">
+                          {ant.roleState.primaryRole}
+                        </span>
+                        <span className="px-1.5 py-0.2 rounded bg-slate-950 text-emerald-400 text-[9px]">
+                          Task: {ant.body.task}
+                        </span>
+                      </div>
+                      <span className="text-[9px] text-slate-400">
+                        Phase: <strong className="text-cyan-300">{ant.roleState.switchingPhase || 'ROLE_EXECUTION'}</strong>
+                      </span>
+                    </div>
+
+                    <div className="text-[10px] text-slate-300 flex justify-between bg-slate-950/60 p-1.5 rounded">
+                      <span><strong>WHY IS THIS ANT DOING THIS JOB?</strong></span>
+                      <span className="text-indigo-300 font-medium italic">{ant.roleState.roleSwitchReason || 'High individual task utility & caste morphology match'}</span>
+                    </div>
+
+                    <div className="grid grid-cols-4 gap-1 text-[9px] font-mono text-slate-400 pt-1">
+                      <div>Energy: <strong className="text-amber-400">{(snap.energy * 100).toFixed(0)}%</strong></div>
+                      <div>Health: <strong className="text-rose-400">{(snap.health * 100).toFixed(0)}%</strong></div>
+                      <div>Trips: <strong className="text-cyan-400">{snap.memory.totalTripsCompleted}</strong></div>
+                      <div>Harvested: <strong className="text-emerald-400">{snap.memory.totalFoodHarvested.toFixed(0)}u</strong></div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 6. SOLDIERS & COMBAT DEFENSE INSPECTOR */}
+      {activeSubTab === 'SOLDIER_DEFENSE' && (
+        <div className="flex flex-col gap-3">
+          <div className="bg-slate-950/70 p-3 rounded-xl border border-rose-500/30 flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-rose-300 text-xs flex items-center gap-1.5">
+                <ShieldAlert className="w-4 h-4 text-rose-400" /> Soldier Combat & Colony Perimeter Defense
+              </span>
+              <span className="text-[9px] font-mono text-rose-400 bg-rose-950 px-2 py-0.5 rounded border border-rose-800">
+                {colony.ants.filter((a) => a.roleState.primaryRole === 'SOLDIER' || a.roleState.primaryRole === 'GUARD').length} Active Defenders
+              </span>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 text-center text-[10px] font-mono">
+              <div className="bg-slate-950 p-2 rounded border border-slate-800">
+                <div className="text-slate-400">THREAT LEVEL</div>
+                <div className="text-rose-400 font-bold text-xs">{world.predators.length > 0 ? 'HIGH (PREDATOR DETECTED)' : 'LOW (SECURE)'}</div>
+              </div>
+              <div className="bg-slate-950 p-2 rounded border border-slate-800">
+                <div className="text-slate-400">QUEEN PROTECTION</div>
+                <div className="text-emerald-400 font-bold text-xs">QUEEN_GUARD_RING ACTIVE</div>
+              </div>
+              <div className="bg-slate-950 p-2 rounded border border-slate-800">
+                <div className="text-slate-400">ACTIVE PREDATORS</div>
+                <div className="text-amber-300 font-bold text-xs">{world.predators.length}</div>
+              </div>
+            </div>
+
+            <div className="space-y-1.5 pt-1">
+              <span className="text-[10px] text-slate-400 font-bold block">Defensive Combat Roster:</span>
+              <div className="flex flex-col gap-1.5 max-h-48 overflow-y-auto pr-1">
+                {colony.ants
+                  .filter((a) => a.roleState.primaryRole === 'SOLDIER' || a.roleState.primaryRole === 'GUARD' || a.body.task === 'DEFENDING' || a.body.task === 'DEFEND')
+                  .map((soldier) => (
+                    <div key={soldier.id} className="p-2 rounded bg-slate-900 border border-slate-800 flex items-center justify-between text-[10.5px] font-mono">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-rose-300">{soldier.id}</span>
+                        <span className="text-[9px] bg-rose-950 text-rose-300 px-1.5 rounded border border-rose-800">{soldier.body.caste}</span>
+                        <span className="text-slate-400 text-[9.5px]">Task: {soldier.body.task}</span>
+                      </div>
+                      <div className="flex items-center gap-3 text-[9.5px]">
+                        <span>HP: <strong className="text-rose-400">{(soldier.internalState.health * 100).toFixed(0)}%</strong></span>
+                        <span>Energy: <strong className="text-amber-400">{(soldier.internalState.energy * 100).toFixed(0)}%</strong></span>
+                      </div>
+                    </div>
+                  ))}
+                {colony.ants.filter((a) => a.roleState.primaryRole === 'SOLDIER' || a.roleState.primaryRole === 'GUARD').length === 0 && (
+                  <p className="text-[10px] text-slate-500 italic p-2 bg-slate-950 rounded">No specialized soldiers deployed. General workers provide perimeter sentry response.</p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 7. REAL-TIME BEHAVIOR EVENT LOG */}
+      {activeSubTab === 'BEHAVIOR_LOG' && (
+        <div className="flex flex-col gap-3">
+          <div className="bg-slate-950/70 p-3 rounded-xl border border-blue-500/30 flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-blue-300 text-xs flex items-center gap-1.5">
+                <Activity className="w-4 h-4 text-blue-400" /> Real-Time Superorganism Behavior Log
+              </span>
+              <span className="text-[9px] font-mono text-slate-400">{world.eventLogs.length} Events</span>
+            </div>
+
+            <div className="flex flex-col gap-1 max-h-64 overflow-y-auto pr-1 font-mono text-[10px]">
+              {world.eventLogs.map((log) => (
+                <div key={log.id} className="p-1.5 rounded bg-slate-900/90 border border-slate-800 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-500">[{log.timestamp.toFixed(1)}s]</span>
+                    <span className="text-cyan-400 font-bold">{log.type}</span>
+                    <span className="text-slate-300 font-sans text-[10.5px]">{log.message}</span>
+                  </div>
+                  {log.entityId && <span className="text-[9px] text-slate-400 bg-slate-950 px-1 rounded">{log.entityId}</span>}
+                </div>
+              ))}
             </div>
           </div>
         </div>

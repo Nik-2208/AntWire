@@ -501,5 +501,43 @@ export class Ant {
       }
     }
   }
+
+  /**
+   * Authoritative full organism state snapshot accessor returning all 18 independent ant properties
+   */
+  public getFullOrganismSnapshot() {
+    return {
+      id: this.id,
+      brain: this.controller,
+      memory: this.memory,
+      learning: this.neuromodulator,
+      motivation: this.drives,
+      energy: this.internalState.energy,
+      health: this.internalState.health,
+      hunger: this.internalState.hunger,
+      age: this.internalState.state.age,
+      role: this.roleState.primaryRole,
+      task: this.taskSystem.state.currentTask,
+      target: this.taskSystem.state.targetPosition,
+      navigation: {
+        lastKnownFoodPosition: this.memory.lastKnownFoodPosition,
+        lastKnownThreatPosition: this.memory.lastKnownThreatPosition,
+        breadcrumbsCount: this.memory.recentBreadcrumbs.length,
+      },
+      sensoryState: this.sensors.lastSnapshot,
+      motorState: this.lastAction,
+      rewardState: {
+        lastReward: this.latestDecision?.confidence || 0,
+      },
+      communicationState: {
+        helpRequested: this.internalState.state.helpRequested,
+      },
+      pheromoneState: this.pheromoneState,
+      socialState: {
+        roleState: this.roleState,
+        switchingPhase: this.roleState.switchingPhase || 'ROLE_EXECUTION',
+      },
+    };
+  }
 }
 

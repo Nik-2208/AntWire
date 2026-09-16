@@ -100,6 +100,12 @@ export class Predator {
     return this.profile.radius;
   }
 
+  public takeDamage(amount: number): void {
+    if (amount > 0) {
+      this.state.health = Math.max(0, this.state.health - amount);
+    }
+  }
+
   public update(
     dt: number,
     ants: Ant[],
