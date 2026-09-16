@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "If you use AntWire in your computational biology, robotics, or multi-agent research, please cite it as below."
+title: "ANTWIRE: Biologically Inspired Ant Intelligence, Brain Simulation & Colony Behavior"
+abstract: "An experimental biologically informed computational platform inspired by ant nervous systems, insect behavior, and collective colony intelligence."
+version: 1.0.0
+date-released: 2026-09-15
+authors:
+  - family-names: "Chavda"
+    given-names: "Nikhilesh H."
+    website: "https://nik-portfolio-lime.vercel.app/"
+repository-code: "https://github.com/Nik-2208/ant-brain"
+license: "MIT"
+keywords:
+  - "computational-neuroscience"
+  - "insect-neurobiology"
+  - "ant-colony-optimization"
+  - "artificial-life"
+  - "multi-agent-systems"
+  - "spiking-neural-networks"
