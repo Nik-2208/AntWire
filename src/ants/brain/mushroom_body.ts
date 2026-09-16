@@ -36,7 +36,8 @@ export class MushroomBodyCircuit {
     pnActivations: [number, number, number, number, number],
     rewardEvent: number, // +1 on eating food / harvest
     punishmentEvent: number, // +1 on injury / predator bite
-    dt: number
+    dt: number,
+    withoutLearning = false
   ): { appetitiveValence: number; aversiveValence: number; activeKCCount: number } {
     // 1. Neuromodulation dynamics (Octopamine / Dopamine surges with exponential decay)
     this.state.octopamineLevel = Math.max(0, this.state.octopamineLevel * Math.exp(-3.0 * dt) + rewardEvent * 1.5);
@@ -69,7 +70,7 @@ export class MushroomBodyCircuit {
 
     // 4. Three-Factor Synaptic Plasticity (Pre-synaptic KC * Post-synaptic Neuromodulator)
     const netModulator = this.state.octopamineLevel - this.state.dopamineLevel;
-    if (Math.abs(netModulator) > 0.05) {
+    if (!withoutLearning && Math.abs(netModulator) > 0.05) {
       for (let kc = 0; kc < this.numKenyonCells; kc++) {
         const kcAct = this.state.kenyonCellActivations[kc];
         if (kcAct > 0.1) {

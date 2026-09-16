@@ -60,4 +60,19 @@ export class ActionFactory {
       speedMultiplier: 0.0,
     };
   }
+
+  public static stop(): AntAction {
+    return {
+      type: 'REST',
+      speedMultiplier: 0.0,
+      turnAngle: 0.0,
+    };
+  }
+
+  public static interact(): AntAction {
+    return {
+      type: 'INTERACT',
+      speedMultiplier: 0.0,
+    };
+  }
 }

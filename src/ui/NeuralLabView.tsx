@@ -63,6 +63,9 @@ import {
 } from 'lucide-react';
 import * as THREE from 'three';
 
+import { BIOLOGICAL_VALIDATION_MATRIX, BiologicalValidationEntry } from '../ants/brain/biological_validation_matrix';
+import { FUNCTIONAL_CIRCUIT_DEFINITIONS, FunctionalCircuitId } from '../ants/brain/circuit_modules';
+
 export type BrainMode = 'RULE' | 'SYNTHETIC' | 'SNN' | 'BIOLOGICAL';
 export type LODLevel = 'LOD_0_MACRO' | 'LOD_1_CLUSTERS' | 'LOD_2_NEURONS' | 'LOD_3_SYNAPSES';
 
@@ -76,6 +79,8 @@ export const NeuralLabView: React.FC<NeuralLabViewProps> = ({ selectedAnt }) => 
   const [neuronScaleChoice, setNeuronScaleChoice] = useState<number>(55000);
   const [lodLevel, setLodLevel] = useState<LODLevel>('LOD_2_NEURONS');
   const [showFullscreenBrain, setShowFullscreenBrain] = useState(false);
+  const [showValidationModal, setShowValidationModal] = useState(false);
+  const [selectedCircuit, setSelectedCircuit] = useState<FunctionalCircuitId | 'ALL'>('ALL');
 
   // 2. Authoritative 55K Synthetic Brain Instance
   const brain55kRef = useRef<SyntheticBrain55K>(new SyntheticBrain55K(55000, 42));
@@ -567,8 +572,20 @@ export const NeuralLabView: React.FC<NeuralLabViewProps> = ({ selectedAnt }) => 
   const handleTrace55KPath = () => {
     const srcReg = SYNTHETIC_NEUROPIL_REGIONS[brain55k.regionIds[pathSourceIndex]]?.code || 'AL';
     const dstReg = SYNTHETIC_NEUROPIL_REGIONS[brain55k.regionIds[pathTargetIndex]]?.code || 'SEZ';
-    const pathStr = `${srcReg} [N-${pathSourceIndex}] → CX-EB [N-14500] → MB-KC [N-22100] → ${dstReg} [N-${pathTargetIndex}] (Weight: +0.89, Latency: 4.2ms)`;
-    setTracedPathString(pathStr);
+    const result = brain55k.findSynapticPath(pathSourceIndex, pathTargetIndex);
+
+    if (result.found) {
+      const formattedHops = result.pathNodes.map((nId, idx) => {
+        const reg = SYNTHETIC_NEUROPIL_REGIONS[brain55k.regionIds[nId]]?.code || 'NEU';
+        return `${reg} [N-${nId}]`;
+      }).join(' → ');
+      const avgW = result.pathWeights.length > 0
+        ? (result.pathWeights.reduce((a, b) => a + b, 0) / result.pathWeights.length).toFixed(3)
+        : '1.000';
+      setTracedPathString(`${formattedHops} | Mean Weight: ${avgW} | Latency: ${result.totalLatencyMs.toFixed(1)}ms`);
+    } else {
+      setTracedPathString(`No direct functional synapse between N-${pathSourceIndex} (${srcReg}) and N-${pathTargetIndex} (${dstReg})`);
+    }
   };
 
   // Save 55K Model Checkpoint
@@ -726,6 +743,12 @@ export const NeuralLabView: React.FC<NeuralLabViewProps> = ({ selectedAnt }) => 
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowValidationModal(true)}
+            className="px-2 py-0.5 rounded bg-emerald-950/80 border border-emerald-700/60 text-emerald-300 font-bold text-[10px] hover:bg-emerald-900/80 transition-all flex items-center gap-1 cursor-pointer"
+          >
+            <BookOpen className="w-3 h-3 text-emerald-400" /> Validation Matrix
+          </button>
           {brainMode === 'RULE' && <ScientificBadge category="BIOLOGICAL_INSPIRATION" />}
           {brainMode === 'SYNTHETIC' && <ScientificBadge category="COMPUTATIONAL_ABSTRACTION" />}
           {brainMode === 'SNN' && <ScientificBadge category="BIOLOGICAL_INSPIRATION" />}
@@ -1046,6 +1069,49 @@ export const NeuralLabView: React.FC<NeuralLabViewProps> = ({ selectedAnt }) => 
           brain={brain55k}
           onClose={() => setShowFullscreenBrain(false)}
         />
+      )}
+
+      {/* BIOLOGICAL VALIDATION MATRIX MODAL */}
+      {showValidationModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <div className="bg-slate-950 border border-slate-800 rounded-2xl w-full max-w-4xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+            <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900/60">
+              <div className="flex items-center gap-2">
+                <BookOpen className="w-5 h-5 text-emerald-400" />
+                <div>
+                  <h3 className="text-sm font-bold text-slate-100">ANTWIRE — Biological Validation Matrix</h3>
+                  <p className="text-[10px] text-slate-400">Literature Citations, Empirical Species Scope, Fidelity Tiers & Scientific Limitations</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowValidationModal(false)}
+                className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="p-4 overflow-y-auto space-y-3">
+              {BIOLOGICAL_VALIDATION_MATRIX.map((item) => (
+                <div key={item.featureId} className="p-3 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1.5 text-[11px]">
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-emerald-300 text-xs">{item.featureName}</span>
+                    <span className="px-2 py-0.5 rounded text-[9px] font-mono bg-emerald-950 text-emerald-300 border border-emerald-800">
+                      {item.fidelityLevel}
+                    </span>
+                  </div>
+                  <p className="text-slate-300"><strong className="text-slate-400">Biological Fact:</strong> {item.biologicalEvidence}</p>
+                  <p className="text-cyan-300"><strong className="text-slate-400">AntWire Model:</strong> {item.computationalImplementation}</p>
+                  <p className="text-amber-300/90"><strong className="text-slate-400">Limitations:</strong> {item.scientificLimitations}</p>
+                  <div className="flex justify-between items-center pt-1 text-[10px] text-slate-500 font-mono">
+                    <span>Species: {item.speciesScope.join(', ')}</span>
+                    <span className="text-slate-400">Source: {item.sourceCitation}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

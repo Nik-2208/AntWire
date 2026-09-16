@@ -100,4 +100,8 @@ export class AntennalLobeCircuit {
       tropotaxisDifferential,
     };
   }
+
+  public getGlomeruliSnapshot(): GlomerulusState[] {
+    return this.glomeruli.map((g) => ({ ...g }));
+  }
 }
