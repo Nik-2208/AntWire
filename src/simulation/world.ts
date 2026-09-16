@@ -348,7 +348,9 @@ export class SimulationWorld {
             halfH,
             this.simConfig,
             this.eventBus,
-            colonyNeeds
+            colonyNeeds,
+            colony.communicationBus,
+            colony.collaborativeTasks
           );
         } catch (err: any) {
           console.warn(`[SimulationWorld] Isolated ant ${ant.id} update recovery:`, err?.message || err);

@@ -68,6 +68,7 @@ import JSZip from 'jszip';
 import { ModelCheckpoint, ModelArchitecture, ModelWeights } from './model_checkpoint';
 import { REFERENCE_BRAIN_REGIONS } from '../ants/brain/connectome';
 import { SYNTHETIC_NEUROPIL_REGIONS } from '../ants/brain/synthetic_brain_55k';
+import { ModelAuditEngine } from '../ants/brain/model_audit';
 
 export type PackageExportProfile =
   | 'TRAINED_AGENT'
@@ -320,6 +321,9 @@ export class ModelPackageGenerator {
 
     // biological_parameter_catalog.json
     filesToWrite['biological_parameter_catalog.json'] = JSON.stringify(biologicalCatalog, null, 2);
+
+    // audit/model_audit_report.json
+    filesToWrite['audit/model_audit_report.json'] = JSON.stringify(ModelAuditEngine.auditModel(), null, 2);
 
     // MODEL_CARD.md
     filesToWrite['MODEL_CARD.md'] = this.getModelCard(checkpoint, antId, species, profile);

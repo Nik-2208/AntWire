@@ -15,6 +15,9 @@ import { SimulationConfig } from '../simulation/config';
 import { SimulationEventBus } from '../simulation/events';
 import { ColonyRoleManager, RoleDistribution } from './roles';
 import { ColonyNeedsContext } from '../ants/task_system';
+import { ColonyCommunicationBus } from './communication';
+import { CollaborativeTaskManager } from './collaborative_tasks';
+import { AuthoritativeRewardEngine } from '../simulation/authoritative_reward_engine';
 
 export interface FoodFlowEdge {
   id: string;
@@ -47,6 +50,8 @@ export interface ColonyStatistics {
   buildingMaterial: number;
   surfaceSoilMound: number;
   recentFoodFlow: FoodFlowEdge[];
+  activeMessagesInFlight: number;
+  activeCollaborativeTasks: number;
 }
 
 export interface CorpseEntity {
@@ -77,6 +82,11 @@ export class Colony {
   public status: ColonyStatus = 'HEALTHY';
   public controlMode: ColonyControlMode = 'AUTONOMOUS';
   public roleManager: ColonyRoleManager = new ColonyRoleManager();
+
+  // Distributed superorganism communication & cooperative task systems
+  public communicationBus: ColonyCommunicationBus = new ColonyCommunicationBus();
+  public collaborativeTasks: CollaborativeTaskManager = new CollaborativeTaskManager();
+  public rewardEngine: AuthoritativeRewardEngine = AuthoritativeRewardEngine.getInstance();
 
   // Corpses and deceased archive
   public corpses: CorpseEntity[] = [];
@@ -221,7 +231,45 @@ export class Colony {
   ): void {
     const cfg = config || SimulationConfig.instance;
 
-    // 0. Check Autonomous Subnest Planning Triggers
+    // 0. Update Distributed Superorganism Communication & Collaborative Tasks
+    this.communicationBus.update(dt);
+
+    const livingAntIds = new Set(this.ants.filter((a) => a.internalState.state.isAlive).map((a) => a.id));
+    const antPositions = new Map(this.ants.map((a) => [a.id, a.body.position]));
+    const coopRewards = this.collaborativeTasks.update(dt, simTime, livingAntIds, antPositions);
+    for (const rew of coopRewards) {
+      this.rewardEngine.emitReward(
+        rew.antId,
+        rew.eventType,
+        rew.action,
+        rew.result,
+        rew.value,
+        rew.reason,
+        simTime,
+        rew.taskId,
+        rew.individualContribution,
+        rew.teamSuccess,
+        eventBus
+      );
+    }
+    this.rewardEngine.cleanup(simTime);
+
+    // Auto-seed collective heavy transport task when large food clusters exist
+    if (foodClusters && foodClusters.length > 0 && this.collaborativeTasks.tasks.length === 0) {
+      const heavyCluster = foodClusters.find((c) => c.amount >= 6.0);
+      if (heavyCluster) {
+        this.collaborativeTasks.createCollaborativeTask(
+          'COLLECTIVE_HEAVY_TRANSPORT',
+          heavyCluster.position,
+          Math.min(4, Math.max(2, Math.floor(this.ants.length / 3))),
+          heavyCluster.amount * 10,
+          simTime,
+          this.nest.entrancePosition
+        );
+      }
+    }
+
+    // 0.5 Check Autonomous Subnest Planning Triggers
     if (foodClusters && foodClusters.length > 0) {
       this.nest.checkSubnestTrigger(
         Math.floor(simTime * 60),
@@ -753,6 +801,8 @@ export class Colony {
       buildingMaterial: this.nest.buildingMaterial,
       surfaceSoilMound: this.nest.surfaceSoilMound,
       recentFoodFlow: [...this.foodFlowHistory],
+      activeMessagesInFlight: this.communicationBus.stats.activeInFlightMessages,
+      activeCollaborativeTasks: this.collaborativeTasks.tasks.length,
     };
   }
 }

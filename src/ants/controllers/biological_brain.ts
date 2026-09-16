@@ -19,8 +19,8 @@ export class BiologicalBrainController implements AntController {
   public brain: BiologicallyInformedAntBrain;
   public latestBrainSnapshot: AntBrainStateSnapshot | null = null;
 
-  constructor() {
-    this.brain = new BiologicallyInformedAntBrain();
+  constructor(antId: string = 'ANT-DEFAULT') {
+    this.brain = new BiologicallyInformedAntBrain(antId);
   }
 
   public decide(

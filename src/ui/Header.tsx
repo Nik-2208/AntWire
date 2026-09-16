@@ -21,7 +21,6 @@ import {
   Database,
   Settings,
   Plus,
-  CheckCircle2,
   Scale,
   BookOpen,
 } from 'lucide-react';
@@ -72,7 +71,6 @@ interface HeaderProps {
   onTogglePheromones: () => void;
   onToggleSensorRays: () => void;
   onSelectPreset: (preset: ExperimentPreset) => void;
-  onRunKnownGoodDemo: () => void;
   onOpenAddEntity: () => void;
   onOpenManageEntities?: () => void;
   onReset: () => void;
@@ -89,7 +87,6 @@ export const Header: React.FC<HeaderProps> = ({
   onStepOnce,
   onSetTimeScale,
   onSelectPreset,
-  onRunKnownGoodDemo,
   onOpenAddEntity,
   onOpenManageEntities,
   onReset,
@@ -182,16 +179,6 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
         )}
 
-        {/* KNOWN GOOD DEMO BUTTON */}
-        <button
-          onClick={onRunKnownGoodDemo}
-          className="px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-lg bg-gradient-to-r from-amber-600 to-emerald-600 hover:from-amber-500 hover:to-emerald-500 text-white text-[11px] sm:text-xs font-bold flex items-center gap-1 shadow-md shadow-amber-950/50 border border-amber-300/40 transition-all hover:scale-105 cursor-pointer"
-          title="Reset and launch guaranteed working foraging loop"
-        >
-          <CheckCircle2 className="w-3.5 h-3.5 text-amber-200" />
-          <span className="hidden md:inline">Demo</span>
-        </button>
-
         {/* Playback Controls */}
         <div className="flex items-center bg-slate-900 border border-slate-800 rounded-lg p-0.5 gap-0.5">
           <button
@@ -214,7 +201,7 @@ export const Header: React.FC<HeaderProps> = ({
                 ? 'bg-slate-800 text-cyan-300 hover:bg-cyan-950'
                 : 'text-slate-600 cursor-not-allowed'
             }`}
-            title="Step 1 Tick"
+            title="Step Forward (1 Frame)"
           >
             <StepForward className="w-3.5 h-3.5" />
           </button>

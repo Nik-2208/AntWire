@@ -21,6 +21,11 @@ export class AntBody {
   public speed: number = 0;
   public radius: number = 0.5; // collision radius
 
+  // Biomechanical & Morphological Parameters
+  public massMg: number;
+  public dimensionsMm: { length: number; width: number; height: number };
+  public carryingCapacityMg: number;
+
   // Visual/Kinematic Gait
   public gaitPhase: number = 0; // for 6-legged tripod gait animation
   public isMoving: boolean = false;
@@ -46,16 +51,105 @@ export class AntBody {
     this.velocity = { x: 0, y: 0 };
     this.caste = caste;
 
+    // Biologically calibrated morphological scale
+    if (caste === 'QUEEN') {
+      this.massMg = 18.5;
+      this.dimensionsMm = { length: 11.2, width: 2.8, height: 2.6 };
+      this.carryingCapacityMg = 8.0;
+      this.radius = 0.85;
+    } else if (caste === 'SOLDIER') {
+      this.massMg = 9.2;
+      this.dimensionsMm = { length: 7.4, width: 2.1, height: 1.8 };
+      this.carryingCapacityMg = 28.0;
+      this.radius = 0.65;
+    } else {
+      // WORKER (Default Formica / Camponotus worker)
+      this.massMg = 4.8;
+      this.dimensionsMm = { length: 5.6, width: 1.4, height: 1.2 };
+      this.carryingCapacityMg = 16.5; // ~3.4x body weight
+      this.radius = 0.5;
+    }
+
     this.traits = {
-      movementSpeed: 4.2,
-      turnSpeed: 5.5,
-      sensoryRange: 2.2,
+      movementSpeed: caste === 'QUEEN' ? 2.5 : caste === 'SOLDIER' ? 3.6 : 4.2,
+      turnSpeed: caste === 'QUEEN' ? 3.5 : 5.5,
+      sensoryRange: caste === 'QUEEN' ? 1.8 : 2.2,
       antennaeAngle: 0.55, // ~31.5 degrees
-      energyEfficiency: 1.0,
-      explorationTendency: 1.0,
-      fearThreshold: 1.0,
+      energyEfficiency: caste === 'QUEEN' ? 1.4 : 1.0,
+      explorationTendency: caste === 'QUEEN' ? 0.1 : 1.0,
+      fearThreshold: caste === 'SOLDIER' ? 0.4 : 1.0,
       ...customTraits,
     };
+  }
+
+  /**
+   * Computes authoritative spatial locations of major body segments in world coordinates
+   */
+  public getSegments(): { head: Vector2D; alitrunk: Vector2D; petiole: Vector2D; gaster: Vector2D } {
+    const cos = Math.cos(this.heading);
+    const sin = Math.sin(this.heading);
+    const scale = this.radius;
+
+    return {
+      head: { x: this.position.x + cos * scale * 0.9, y: this.position.y + sin * scale * 0.9 },
+      alitrunk: { x: this.position.x + cos * scale * 0.1, y: this.position.y + sin * scale * 0.1 },
+      petiole: { x: this.position.x - cos * scale * 0.4, y: this.position.y - sin * scale * 0.4 },
+      gaster: { x: this.position.x - cos * scale * 1.0, y: this.position.y - sin * scale * 1.0 },
+    };
+  }
+
+  /**
+   * Computes antenna and optical sensor anchor positions in world coordinates
+   */
+  public getSensorLocations(): { leftAntennaTip: Vector2D; rightAntennaTip: Vector2D; compoundEyes: Vector2D } {
+    const head = this.getSegments().head;
+    const leftAngle = this.heading + this.traits.antennaeAngle;
+    const rightAngle = this.heading - this.traits.antennaeAngle;
+    const reach = this.traits.sensoryRange * 0.6;
+
+    return {
+      leftAntennaTip: {
+        x: head.x + Math.cos(leftAngle) * reach,
+        y: head.y + Math.sin(leftAngle) * reach,
+      },
+      rightAntennaTip: {
+        x: head.x + Math.cos(rightAngle) * reach,
+        y: head.y + Math.sin(rightAngle) * reach,
+      },
+      compoundEyes: {
+        x: head.x - Math.cos(this.heading) * 0.1,
+        y: head.y - Math.sin(this.heading) * 0.1,
+      },
+    };
+  }
+
+  /**
+   * Computes 6-legged alternating tripod gait phase and ground contact states
+   */
+  public getLegStates(): { id: string; side: 'L' | 'R'; segment: 'T1' | 'T2' | 'T3'; inContact: boolean }[] {
+    // Tripod 1: L1, R2, L3 vs Tripod 2: R1, L2, R3
+    const tripod1InContact = Math.sin(this.gaitPhase) >= 0;
+    const tripod2InContact = !tripod1InContact;
+
+    return [
+      { id: 'L1', side: 'L', segment: 'T1', inContact: tripod1InContact },
+      { id: 'R1', side: 'R', segment: 'T1', inContact: tripod2InContact },
+      { id: 'L2', side: 'L', segment: 'T2', inContact: tripod2InContact },
+      { id: 'R2', side: 'R', segment: 'T2', inContact: tripod1InContact },
+      { id: 'L3', side: 'L', segment: 'T3', inContact: tripod1InContact },
+      { id: 'R3', side: 'R', segment: 'T3', inContact: tripod2InContact },
+    ];
+  }
+
+  /**
+   * Calculates instantaneous metabolic burn rate based on mass, velocity, and carried load
+   */
+  public getMetabolicBurnRate(cargoMassMg: number = 0): number {
+    const totalMass = this.massMg + cargoMassMg;
+    const speedRatio = this.speed / Math.max(0.1, this.traits.movementSpeed);
+    const basalMetabolism = 0.005 * (this.massMg / 5.0);
+    const locomotionCost = 0.04 * speedRatio * (totalMass / this.massMg) * (1.0 / this.traits.energyEfficiency);
+    return basalMetabolism + locomotionCost;
   }
 
   public updateMotion(dt: number, forwardThrottle: number, turnThrottle: number): void {

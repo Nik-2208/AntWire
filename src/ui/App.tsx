@@ -252,6 +252,8 @@ export const App: React.FC = () => {
     buildingMaterial: 10.0,
     surfaceSoilMound: 2.0,
     recentFoodFlow: [],
+    activeMessagesInFlight: 0,
+    activeCollaborativeTasks: 0,
   };
 
   const diagnostics: DiagnosticsState = {
@@ -321,19 +323,6 @@ export const App: React.FC = () => {
     if (sceneManagerRef.current) sceneManagerRef.current.selectedAntId = null;
   }, [world]);
 
-  const handleRunKnownGoodDemo = useCallback(() => {
-    const demo = EXPERIMENT_PRESETS.find((p) => p.id === 'known-good-demo');
-    if (demo) {
-      demo.setup(world);
-      setSelectedAntId('A-001');
-      if (sceneManagerRef.current) {
-        sceneManagerRef.current.selectedAntId = 'A-001';
-        sceneManagerRef.current.cameraDistance = 26.0;
-        sceneManagerRef.current.updateOrbitCameraPosition();
-      }
-    }
-  }, [world]);
-
   const handleReset = useCallback(() => {
     world.reset();
     setSelectedAntId(null);
@@ -383,7 +372,6 @@ export const App: React.FC = () => {
           onTogglePheromones={handleTogglePheromones}
           onToggleSensorRays={handleToggleSensorRays}
           onSelectPreset={handleSelectPreset}
-          onRunKnownGoodDemo={handleRunKnownGoodDemo}
           onOpenAddEntity={() => setAddEntityModalOpen(true)}
           onOpenManageEntities={() => setManageEntityModalOpen(true)}
           onReset={handleReset}

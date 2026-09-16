@@ -17,6 +17,9 @@ import { SimulationConfig } from '../simulation/config';
 import { SimulationEventBus } from '../simulation/events';
 import { TaskSystem, ColonyNeedsContext } from './task_system';
 import { AntRoleState } from '../colony/roles';
+import { ColonyCommunicationBus } from '../colony/communication';
+import { CollaborativeTaskManager } from '../colony/collaborative_tasks';
+import { AuthoritativeRewardEngine } from '../simulation/authoritative_reward_engine';
 
 export class Ant {
   public id: string;
@@ -53,7 +56,7 @@ export class Ant {
     this.internalState = new AntBodyState();
     this.drives = new AntMotivationalDrives();
     this.memory = new AntMemory();
-    this.controller = controller || new BiologicalBrainController();
+    this.controller = controller || new BiologicalBrainController(id);
     this.taskSystem = new TaskSystem('EXPLORING', 0, initialPos);
     this.roleState = {
       primaryRole: caste === 'QUEEN' ? 'REPRODUCTIVE' : primaryRole,
@@ -85,7 +88,9 @@ export class Ant {
     worldHalfH: number,
     config?: SimulationConfig,
     eventBus?: SimulationEventBus,
-    colonyNeeds?: ColonyNeedsContext
+    colonyNeeds?: ColonyNeedsContext,
+    communicationBus?: ColonyCommunicationBus,
+    collaborativeTasks?: CollaborativeTaskManager
   ): void {
     if (!this.internalState.state.isAlive) {
       this.body.speed = 0;
@@ -104,6 +109,69 @@ export class Ant {
       predators,
       nearbyAnts
     );
+
+    // 1.5 COMMUNICATION BUS MESSAGING (In-Flight Delivery & Outbox)
+    if (communicationBus) {
+      const incoming = communicationBus.getMessagesForAnt(
+        this.id,
+        this.body.position,
+        this.body.traits.sensoryRange / 2.2
+      );
+
+      for (const msg of incoming) {
+        if (msg.type === 'DANGER' && msg.location) {
+          this.internalState.state.threatLevel = Math.max(this.internalState.state.threatLevel, 0.85);
+          this.memory.rememberThreat(msg.location);
+        } else if (msg.type === 'RESOURCE_FOUND' && msg.location) {
+          this.memory.rememberFood(msg.location);
+          if (this.taskSystem.state.currentTask === 'EXPLORING' || this.taskSystem.state.currentTask === 'IDLE') {
+            this.taskSystem.state.currentTask = 'SEEK_FOOD';
+            this.taskSystem.state.targetPosition = { ...msg.location };
+          }
+        } else if (msg.type === 'RECRUIT_REQUEST' && msg.payload?.taskId && collaborativeTasks) {
+          if (this.taskSystem.state.currentTask === 'EXPLORING' || this.taskSystem.state.currentTask === 'IDLE') {
+            collaborativeTasks.joinTask(msg.payload.taskId, this.id, 'HELPER');
+          }
+        }
+      }
+
+      // Outgoing discovery communication
+      if (sensorySnapshot.foodOdorConcentration > 0.65 && sensorySnapshot.detectedFoodId) {
+        communicationBus.postMessage(
+          this.id,
+          'BROADCAST',
+          'RESOURCE_FOUND',
+          { foodId: sensorySnapshot.detectedFoodId },
+          simTime,
+          this.body.position,
+          4.0,
+          0.9
+        );
+      }
+
+      if (sensorySnapshot.predatorDetected) {
+        communicationBus.postMessage(
+          this.id,
+          'BROADCAST',
+          'DANGER',
+          { threatProximity: sensorySnapshot.predatorProximity },
+          simTime,
+          this.body.position,
+          5.0,
+          1.0
+        );
+      }
+    }
+
+    // 1.6 COLLABORATIVE TASK INTERACTION
+    if (collaborativeTasks) {
+      const joinable = collaborativeTasks.getJoinableTasks(this.body.position, 6.0);
+      if (joinable.length > 0) {
+        const task = joinable[0];
+        collaborativeTasks.joinTask(task.taskId, this.id);
+        collaborativeTasks.recordContribution(task.taskId, this.id, dt * 1.2);
+      }
+    }
 
     // 2. INTERNAL PHYSIOLOGY UPDATE
     this.internalState.update(
@@ -284,6 +352,20 @@ export class Ant {
                 this.taskSystem.setTask('RETURNING_TO_NEST', simTime, 'HIGH', 30.0);
                 this.body.task = 'RETURNING_TO_NEST';
 
+                AuthoritativeRewardEngine.getInstance().emitReward(
+                  this.id,
+                  'ACTION',
+                  'COLLECT_FOOD',
+                  'SUCCESS',
+                  2.5,
+                  'Harvested food parcel into crop mandibles.',
+                  simTime,
+                  'COLLECT_FOOD',
+                  1.0,
+                  undefined,
+                  eventBus
+                );
+
                 if (eventBus) {
                   eventBus.emit({
                     type: 'FOOD_PICKED_UP',
@@ -324,6 +406,19 @@ export class Ant {
         );
         if (distToNest <= nestRadius + 0.8 && this.internalState.state.carryingFoodAmount > 0) {
           // Food is deposited and handled by Colony.update loop for strict conservation
+          AuthoritativeRewardEngine.getInstance().emitReward(
+            this.id,
+            'COMPLETION',
+            'DEPOSIT_FOOD',
+            'SUCCESS',
+            8.0,
+            'Successfully delivered cargo into nest storage chamber.',
+            simTime,
+            'RETURNING_TO_NEST',
+            1.0,
+            undefined,
+            eventBus
+          );
           this.taskSystem.completeTask(simTime);
           this.body.task = 'IDLE_REASSESS';
         }
