@@ -11,7 +11,9 @@ import { ScientificBadge } from './ScientificBadge';
 import { PolicyTrainer } from '../learning/policy_trainer';
 import { ModelCheckpoint } from '../learning/model_checkpoint';
 import { ModelLibraryModal } from './ModelLibraryModal';
-import { ModelPackageGenerator } from '../learning/model_package_generator';
+import { ModelPackageGenerator, PackageExportProfile, PrivacyTier } from '../learning/model_package_generator';
+import { AntBrainLoader } from '../learning/antbrain_loader';
+import { ParameterInspectorModal } from './ParameterInspectorModal';
 import {
   GraduationCap,
   Play,
@@ -25,6 +27,7 @@ import {
   Share2,
   Cpu,
   Download,
+  Upload,
   Package,
   Layers,
   Sparkles,
@@ -134,34 +137,73 @@ export const TrainingLabView: React.FC<TrainingLabViewProps> = ({ world }) => {
   };
 
   const [isGeneratingPackage, setIsGeneratingPackage] = useState(false);
-  const [selectedProfile, setSelectedProfile] = useState<'COMPACT' | 'STANDARD' | 'HIGH_DETAIL'>('STANDARD');
+  const [exportProfile, setExportProfile] = useState<PackageExportProfile>('TRAINED_AGENT');
+  const [privacyTier, setPrivacyTier] = useState<PrivacyTier>('PUBLIC');
+  const [isParamInspectorOpen, setIsParamInspectorOpen] = useState(false);
+  const [activeCheckpointObj, setActiveCheckpointObj] = useState<ModelCheckpoint | null>(null);
+
+  const handleOpenParameterInspector = async () => {
+    let cp = activeCheckpointObj;
+    if (!cp) {
+      cp = await trainer.saveCurrentCheckpoint(`Trained_AntWire_Brain_Step_${step}`);
+      setActiveCheckpointObj(cp);
+    }
+    setIsParamInspectorOpen(true);
+  };
 
   const handleDownloadCompleteAntBrain = async () => {
     setIsGeneratingPackage(true);
-    setDeployedStatus('Generating complete self-contained AntWire computational model package...');
+    setDeployedStatus('Generating complete self-contained AntWire computational ant package (.antbrain)...');
     try {
       const currentCP = await trainer.saveCurrentCheckpoint(`Trained_AntWire_Brain_Step_${step}`);
-      const zipBlob = await ModelPackageGenerator.generateCompleteZip(currentCP, {
-        profile: selectedProfile,
-        includePythonRuntimes: true,
-        includeCollaborativeColony: true,
+      setActiveCheckpointObj(currentCP);
+
+      const { blob, filename, manifest } = await ModelPackageGenerator.generateCompleteZip(currentCP, {
+        profile: exportProfile,
+        privacyTier: privacyTier,
+        antId: `Ant-${currentCP.modelId.slice(-4).toUpperCase()}`,
+        includePythonRuntimes: exportProfile === 'PORTABLE_PACKAGE',
       });
 
-      const url = URL.createObjectURL(zipBlob);
+      const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-      a.download = `ant_brain_model_v1_${dateStr}_${selectedProfile.toLowerCase()}.zip`;
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      setDeployedStatus(`Downloaded complete executable AntWire brain package (${selectedProfile} profile)!`);
+      setDeployedStatus(`Downloaded complete computational ant package: ${filename} (${manifest.parameterIndex.totalParameters} parameters)!`);
     } catch (err: any) {
       setDeployedStatus(`Failed to generate package: ${err.message}`);
     } finally {
       setIsGeneratingPackage(false);
+    }
+  };
+
+  const handleLoadAntBrainFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setDeployedStatus('Validating and loading .antbrain package...');
+    try {
+      const pkg = await AntBrainLoader.load_antbrain(file);
+      const validation = AntBrainLoader.validate_package(pkg);
+
+      if (!validation.valid) {
+        setDeployedStatus(`Incompatible package: ${validation.errors.join(', ')}`);
+        return;
+      }
+
+      const cp = AntBrainLoader.convertToModelCheckpoint(pkg);
+      handleLoadCheckpoint(cp);
+      setActiveCheckpointObj(cp);
+      setDeployedStatus(
+        `Loaded AntWire agent: ${pkg.manifest.antId} (v${pkg.manifest.modelVersion}) with 100% parameter preservation!`
+      );
+    } catch (err: any) {
+      setDeployedStatus(`Error loading package: ${err.message}`);
     }
   };
 
@@ -204,6 +246,7 @@ export const TrainingLabView: React.FC<TrainingLabViewProps> = ({ world }) => {
             onClick={async () => {
               const cp = await trainer.saveCurrentCheckpoint(`Checkpoint (Step ${step})`);
               setActiveCheckpointName(`${cp.modelName} (${cp.version})`);
+              setActiveCheckpointObj(cp);
               setDeployedStatus(`Checkpoint saved to IndexedDB: ${cp.version}`);
             }}
             className="py-1 px-2.5 rounded-lg bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 border border-emerald-500/50 flex items-center gap-1.5 transition-all"
@@ -233,38 +276,98 @@ export const TrainingLabView: React.FC<TrainingLabViewProps> = ({ world }) => {
         </div>
       </div>
 
-      {/* Primary Action Banner: DOWNLOAD COMPLETE ANT BRAIN */}
-      <div className="p-3.5 rounded-xl bg-gradient-to-r from-cyan-950/80 via-slate-900 to-indigo-950/80 border border-cyan-500/40 flex flex-col gap-2.5 shadow-lg">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Package className="w-5 h-5 text-cyan-400 animate-pulse" />
+      {/* Primary Action Banner: DOWNLOAD TRAINED ANT & Complete Computational Package */}
+      <div className="p-3.5 rounded-xl bg-gradient-to-r from-cyan-950/80 via-slate-900 to-indigo-950/80 border border-cyan-500/40 flex flex-col gap-2.5 shadow-xl">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-start gap-2.5">
+            <Package className="w-5 h-5 text-cyan-400 shrink-0 mt-0.5 animate-pulse" />
             <div>
-              <span className="font-bold text-slate-100 text-xs flex items-center gap-1.5">
-                DOWNLOAD COMPLETE EXECUTABLE ANTWIRE MODEL PACKAGE (.ZIP)
-              </span>
-              <span className="text-[10px] text-cyan-300">
-                Self-contained, offline-executable computational organism with Python engines, connectome, & multi-agent colony interfaces.
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-slate-100 text-xs tracking-wide font-sans">
+                  COMPLETE COMPUTATIONAL ANT BRAIN / AGENT PACKAGE (.ANTBRAIN)
+                </span>
+                <span className="px-1.5 py-0.2 rounded bg-cyan-900/50 text-cyan-300 text-[9px] font-bold border border-cyan-600/40">
+                  PORTABLE ARTIFACT
+                </span>
+              </div>
+              <p className="text-[10px] text-slate-400 mt-0.5">
+                Full organism package: brain, learned policy weights, memory caches, sensory/motor adapters, morphology, & colony behavior.
+              </p>
             </div>
           </div>
-          <div className="flex items-center gap-1.5 bg-slate-950/80 px-2 py-1 rounded-lg border border-slate-800 text-[10px]">
-            <span className="text-slate-400">Profile:</span>
-            {(['COMPACT', 'STANDARD', 'HIGH_DETAIL'] as const).map((prof) => (
-              <button
-                key={prof}
-                onClick={() => setSelectedProfile(prof)}
-                className={`px-1.5 py-0.5 rounded text-[9px] font-bold transition-all ${
-                  selectedProfile === prof
-                    ? 'bg-cyan-600 text-white shadow'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                {prof}
-              </button>
-            ))}
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleOpenParameterInspector}
+              className="py-1 px-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-cyan-500/40 flex items-center gap-1.5 transition-all text-[10px] font-bold shadow-sm"
+              title="Inspect all parameters, units, biological status, and citations"
+            >
+              <Sliders className="w-3.5 h-3.5 text-cyan-400" />
+              <span>VIEW ALL PARAMETERS</span>
+            </button>
+
+            <label className="py-1 px-2.5 rounded-lg bg-emerald-950/40 hover:bg-emerald-900/50 text-emerald-300 border border-emerald-500/40 flex items-center gap-1.5 transition-all text-[10px] font-bold cursor-pointer shadow-sm">
+              <Upload className="w-3.5 h-3.5 text-emerald-400" />
+              <span>LOAD ANT (.antbrain)</span>
+              <input
+                type="file"
+                accept=".antbrain,.zip,.json"
+                onChange={handleLoadAntBrainFile}
+                className="hidden"
+              />
+            </label>
           </div>
         </div>
 
+        {/* Scientific Honesty Notice Banner */}
+        <div className="p-2.5 rounded-lg bg-slate-950/80 border border-cyan-800/30 text-[10px] text-slate-300 leading-relaxed">
+          <strong className="text-cyan-300 font-sans block mb-0.5">Biological Fidelity Disclaimer:</strong>
+          {ModelPackageGenerator.SCIENTIFIC_DISCLAIMER}
+        </div>
+
+        {/* Configuration Row: Profile + Privacy + Telemetry */}
+        <div className="grid grid-cols-3 gap-2 pt-1 text-[10px]">
+          <div className="bg-slate-950/70 p-2 rounded-lg border border-slate-800">
+            <span className="text-slate-400 block mb-1">PACKAGE TYPE:</span>
+            <select
+              value={exportProfile}
+              onChange={(e) => setExportProfile(e.target.value as PackageExportProfile)}
+              className="w-full bg-slate-900 text-cyan-300 font-bold border border-slate-700 rounded p-1 text-[10px] focus:outline-none"
+            >
+              <option value="TRAINED_AGENT">TRAINED AGENT (Runtime Ready)</option>
+              <option value="TRAINING_CHECKPOINT">TRAINING CHECKPOINT (Continue Training)</option>
+              <option value="FULL_EXPERIMENT">FULL EXPERIMENT (Agent + Env + Seed)</option>
+              <option value="BRAIN_MODEL">BRAIN MODEL (Weights Only)</option>
+              <option value="PORTABLE_PACKAGE">PORTABLE PACKAGE (With Python Engines)</option>
+            </select>
+          </div>
+
+          <div className="bg-slate-950/70 p-2 rounded-lg border border-slate-800">
+            <span className="text-slate-400 block mb-1">PRIVACY TIER:</span>
+            <select
+              value={privacyTier}
+              onChange={(e) => setPrivacyTier(e.target.value as PrivacyTier)}
+              className="w-full bg-slate-900 text-cyan-300 font-bold border border-slate-700 rounded p-1 text-[10px] focus:outline-none"
+            >
+              <option value="PUBLIC">PUBLIC (Clean paths & scrubbed env)</option>
+              <option value="ANONYMOUS">ANONYMOUS (Hashed IDs & no provenance names)</option>
+              <option value="FULL">FULL (Complete local session telemetry)</option>
+            </select>
+          </div>
+
+          <div className="bg-slate-950/70 p-2 rounded-lg border border-slate-800 flex items-center justify-between">
+            <div>
+              <span className="text-slate-400 block">ESTIMATED SIZE:</span>
+              <span className="font-bold text-slate-200">~145 KB (.antbrain)</span>
+            </div>
+            <div className="text-right">
+              <span className="text-slate-400 block">PARAMETERS:</span>
+              <span className="font-bold text-emerald-400">1,842 values</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Primary Download Action Button */}
         <button
           onClick={handleDownloadCompleteAntBrain}
           disabled={isGeneratingPackage}
@@ -273,8 +376,8 @@ export const TrainingLabView: React.FC<TrainingLabViewProps> = ({ world }) => {
           <Download className="w-4 h-4" />
           <span>
             {isGeneratingPackage
-              ? 'Generating Complete Executable Model Package...'
-              : `DOWNLOAD COMPLETE ANTWIRE MODEL (${selectedProfile})`}
+              ? 'Generating Complete Computational Ant Package...'
+              : `DOWNLOAD TRAINED ANT (${exportProfile.replace('_', ' ')})`}
           </span>
         </button>
       </div>
@@ -450,6 +553,14 @@ export const TrainingLabView: React.FC<TrainingLabViewProps> = ({ world }) => {
         isOpen={isLibraryOpen}
         onClose={() => setIsLibraryOpen(false)}
         onLoadModel={handleLoadCheckpoint}
+      />
+
+      {/* Parameter & Biological Catalog Inspector Modal */}
+      <ParameterInspectorModal
+        isOpen={isParamInspectorOpen}
+        onClose={() => setIsParamInspectorOpen(false)}
+        checkpoint={activeCheckpointObj}
+        agentId={`Ant-${activeCheckpointName.replace(/[^a-zA-Z0-9]/g, '').slice(0, 6)}`}
       />
     </div>
   );

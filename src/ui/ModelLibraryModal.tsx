@@ -6,7 +6,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { ModelCheckpoint, ModelStorageService } from '../learning/model_checkpoint';
-import { Database, Download, Upload, Trash2, Copy, Play, BarChart2, CheckCircle2, X } from 'lucide-react';
+import { ModelPackageGenerator } from '../learning/model_package_generator';
+import { AntBrainLoader } from '../learning/antbrain_loader';
+import { Database, Download, Upload, Trash2, Copy, Play, BarChart2, CheckCircle2, X, Package } from 'lucide-react';
 
 interface ModelLibraryModalProps {
   isOpen: boolean;
@@ -67,21 +69,61 @@ export const ModelLibraryModal: React.FC<ModelLibraryModalProps> = ({ isOpen, on
     URL.revokeObjectURL(url);
   };
 
-  const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleExportAntBrain = async (cp: ModelCheckpoint) => {
+    try {
+      setStatusMessage('Packaging complete .antbrain artifact...');
+      const { blob, filename } = await ModelPackageGenerator.generateCompleteZip(cp, {
+        profile: 'PORTABLE_PACKAGE',
+        privacyTier: 'PUBLIC',
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setStatusMessage(`Exported complete .antbrain package: ${filename}`);
+    } catch (err: any) {
+      setStatusMessage(`Export failed: ${err.message}`);
+    }
+  };
+
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      try {
-        const text = event.target?.result as string;
-        const imported = await ModelStorageService.importFromJSON(text);
-        setStatusMessage(`Successfully imported ${imported.modelName}`);
+
+    try {
+      if (file.name.endsWith('.antbrain') || file.name.endsWith('.zip')) {
+        setStatusMessage('Extracting and validating .antbrain package...');
+        const pkg = await AntBrainLoader.load_antbrain(file);
+        const validation = AntBrainLoader.validate_package(pkg);
+        if (!validation.valid) {
+          setStatusMessage(`Incompatible package: ${validation.errors.join(', ')}`);
+          return;
+        }
+        const cp = AntBrainLoader.convertToModelCheckpoint(pkg);
+        await ModelStorageService.saveCheckpoint(cp);
+        setStatusMessage(`Successfully imported ${cp.modelName} (v${cp.version})`);
         loadStoredModels();
-      } catch (err: any) {
-        setStatusMessage(`Import failed: ${err.message}`);
+      } else {
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+          try {
+            const text = event.target?.result as string;
+            const imported = await ModelStorageService.importFromJSON(text);
+            setStatusMessage(`Successfully imported ${imported.modelName}`);
+            loadStoredModels();
+          } catch (err: any) {
+            setStatusMessage(`Import failed: ${err.message}`);
+          }
+        };
+        reader.readAsText(file);
       }
-    };
-    reader.readAsText(file);
+    } catch (err: any) {
+      setStatusMessage(`Import failed: ${err.message}`);
+    }
   };
 
   return (
@@ -142,8 +184,8 @@ export const ModelLibraryModal: React.FC<ModelLibraryModalProps> = ({ isOpen, on
                 <span>SAVED CHECKPOINTS ({models.length})</span>
                 <label className="flex items-center gap-1 cursor-pointer text-cyan-400 hover:text-cyan-300">
                   <Upload className="w-3.5 h-3.5" />
-                  <span>Import JSON</span>
-                  <input type="file" accept=".json" onChange={handleImportFile} className="hidden" />
+                  <span>Import (.antbrain / JSON)</span>
+                  <input type="file" accept=".antbrain,.zip,.json" onChange={handleImportFile} className="hidden" />
                 </label>
               </div>
 
@@ -268,6 +310,14 @@ export const ModelLibraryModal: React.FC<ModelLibraryModalProps> = ({ isOpen, on
                     >
                       <Download className="w-3.5 h-3.5" />
                       <span>Export JSON</span>
+                    </button>
+                    <button
+                      onClick={() => handleExportAntBrain(selectedModel)}
+                      className="py-1.5 px-3 rounded-lg bg-cyan-950/60 hover:bg-cyan-900/80 text-cyan-300 border border-cyan-700/50 flex items-center gap-1.5 transition-all"
+                      title="Export complete portable .antbrain package"
+                    >
+                      <Package className="w-3.5 h-3.5" />
+                      <span>Export .antbrain</span>
                     </button>
                     <button
                       onClick={() => handleDelete(selectedModel.modelId)}
