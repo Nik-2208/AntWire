@@ -118,13 +118,14 @@ export class ModelStorageService {
         const dbPromise = this.openDatabase();
         const timeoutPromise = new Promise<never>((_, reject) => setTimeout(() => reject(new Error('IndexedDB Timeout')), 100));
         const db = await Promise.race([dbPromise, timeoutPromise]);
-        await new Promise<void>((resolve, reject) => {
+        const opPromise = new Promise<void>((resolve, reject) => {
           const tx = db.transaction(this.STORE_NAME, 'readwrite');
           const store = tx.objectStore(this.STORE_NAME);
           const req = store.put(checkpoint);
           req.onsuccess = () => resolve();
           req.onerror = () => reject(req.error);
         });
+        await Promise.race([opPromise, new Promise<never>((_, reject) => setTimeout(() => reject(new Error('IndexedDB Put Timeout')), 150))]);
       }
     } catch {
       // Robust localStorage fallback
@@ -145,13 +146,14 @@ export class ModelStorageService {
         const dbPromise = this.openDatabase();
         const timeoutPromise = new Promise<never>((_, reject) => setTimeout(() => reject(new Error('IndexedDB Timeout')), 100));
         const db = await Promise.race([dbPromise, timeoutPromise]);
-        const res = await new Promise<ModelCheckpoint | null>((resolve, reject) => {
+        const opPromise = new Promise<ModelCheckpoint | null>((resolve, reject) => {
           const tx = db.transaction(this.STORE_NAME, 'readonly');
           const store = tx.objectStore(this.STORE_NAME);
           const req = store.get(modelId);
           req.onsuccess = () => resolve(req.result || null);
           req.onerror = () => reject(req.error);
         });
+        const res = await Promise.race([opPromise, new Promise<never>((_, reject) => setTimeout(() => reject(new Error('IndexedDB Get Timeout')), 150))]);
         if (res) return res;
       }
     } catch {
@@ -177,13 +179,14 @@ export class ModelStorageService {
         const dbPromise = this.openDatabase();
         const timeoutPromise = new Promise<never>((_, reject) => setTimeout(() => reject(new Error('IndexedDB Timeout')), 100));
         const db = await Promise.race([dbPromise, timeoutPromise]);
-        const list = await new Promise<ModelCheckpoint[]>((resolve, reject) => {
+        const opPromise = new Promise<ModelCheckpoint[]>((resolve, reject) => {
           const tx = db.transaction(this.STORE_NAME, 'readonly');
           const store = tx.objectStore(this.STORE_NAME);
           const req = store.getAll();
           req.onsuccess = () => resolve(req.result || []);
           req.onerror = () => reject(req.error);
         });
+        const list = await Promise.race([opPromise, new Promise<never>((_, reject) => setTimeout(() => reject(new Error('IndexedDB List Timeout')), 150))]);
         if (list && list.length > 0) return list;
       }
     } catch {
@@ -202,15 +205,21 @@ export class ModelStorageService {
   public static async deleteCheckpoint(modelId: string): Promise<boolean> {
     this.memoryStore.delete(modelId);
     try {
-      const db = await this.openDatabase();
-      await new Promise<void>((resolve, reject) => {
-        const tx = db.transaction(this.STORE_NAME, 'readwrite');
-        const store = tx.objectStore(this.STORE_NAME);
-        const req = store.delete(modelId);
-        req.onsuccess = () => resolve();
-        req.onerror = () => reject(req.error);
-      });
-      return true;
+      if (typeof window !== 'undefined' && window.indexedDB) {
+        const dbPromise = this.openDatabase();
+        const timeoutPromise = new Promise<never>((_, reject) => setTimeout(() => reject(new Error('IndexedDB Timeout')), 100));
+        const db = await Promise.race([dbPromise, timeoutPromise]);
+        const opPromise = new Promise<void>((resolve, reject) => {
+          const tx = db.transaction(this.STORE_NAME, 'readwrite');
+          const store = tx.objectStore(this.STORE_NAME);
+          const req = store.delete(modelId);
+          req.onsuccess = () => resolve();
+          req.onerror = () => reject(req.error);
+        });
+        await Promise.race([opPromise, new Promise<never>((_, reject) => setTimeout(() => reject(new Error('IndexedDB Delete Timeout')), 150))]);
+        return true;
+      }
+      return this.deleteFromLocalStorage(modelId);
     } catch {
       return this.deleteFromLocalStorage(modelId);
     }

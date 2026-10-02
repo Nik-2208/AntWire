@@ -53,7 +53,7 @@ export const BiologyInfoPopup: React.FC<BiologyInfoPopupProps> = ({
   });
 
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isTouchRef = useRef(false);
 
   // Sync if topicId prop changes

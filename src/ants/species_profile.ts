@@ -43,6 +43,14 @@ export type CooperationMode =
   | 'COLLECTIVE_CHOP_AND_TRANSPORT'
   | 'DYADIC_COOPERATION';
 
+export type QueenSuccessionStrategy =
+  | 'QUEEN_REARING'
+  | 'GAMERGATE_SUCCESSION'
+  | 'WORKER_REPRODUCTION'
+  | 'QUEEN_ADOPTION_OR_MERGER'
+  | 'QUEENLESS_REPRODUCTIVE_CYCLE'
+  | 'NONE';
+
 export interface AntSpeciesProfile {
   id: string;
   name: string;
@@ -65,6 +73,7 @@ export interface AntSpeciesProfile {
   foragingMode: ForagingMode;
   communicationMode: CommunicationMode;
   cooperationMode: CooperationMode;
+  queenSuccessionStrategy: QueenSuccessionStrategy;
   sensoryAssumptions: string;
   behaviorAssumptions: string;
   pheromoneParameters: {
@@ -79,6 +88,40 @@ export interface AntSpeciesProfile {
 }
 
 export const SPECIES_PROFILES: Record<string, AntSpeciesProfile> = {
+  GENERAL_ANT: {
+    id: 'GENERAL_ANT',
+    name: 'General Ant (Baseline Model)',
+    scientificName: 'Formicidae (Generalist Model)',
+    description: 'GENERAL COMPUTATIONAL ORGANISM: Balances individual path integration with chemical recruitment, cooperative task allocation, and social communication.',
+    casteStructure: 'Polymorphic/monomorphic worker castes (Minim, Minor, Media, Major/Soldier), mated Queen',
+    workerSpecialization: 'Age and experience polyethism (Nurses attend brood/queen, Foragers harvest resources, Soldiers patrol and defend)',
+    foragingStrategy: 'Dual sensory navigation: path integration + chemical trail following + direct volatile odor localization',
+    recruitmentMechanism: 'Context-dependent chemical recruitment trails + local tactile/chemical antennation',
+    pheromoneBehavior: 'Modulated multi-channel deposition (Food, Home, Recruitment, Danger, Task, Explore) with saturation damping',
+    nestOrganization: 'Subterranean chamber network with storage granaries, brood nurseries, queen chambers, and waste middens',
+    foodStrategy: 'Resource discovery -> quality evaluation -> harvesting & transport -> storage delivery -> trophallactic social fluid sharing',
+    defenseBehavior: 'Graduated response: alarm pheromone release, worker evacuation, soldier interception, and cooperative nest defense',
+    queenBroodBehavior: 'Protected subterranean queen chamber; workers groom, feed, and thermoregulate developing eggs, larvae, and pupae',
+    cooperationRules: 'Cooperative heavy transport, collective defense, tandem recruitment, and stomodeal trophallaxis',
+    recruitmentMode: 'MASS_TRAIL_RECRUITMENT',
+    pheromoneMode: 'MODULATED_TRAIL',
+    foragingMode: 'TRAIL_AND_PATH_INTEGRATION',
+    communicationMode: 'ANTENNATION_AND_STRIDULATION',
+    cooperationMode: 'COOPERATIVE_HAULING',
+    queenSuccessionStrategy: 'QUEEN_REARING',
+    sensoryAssumptions: 'Dual antennal chemoreception (tropotaxis), optical compound eye visual fields, and tactile touch sensors.',
+    behaviorAssumptions: 'Local distributed decision making driven by internal physiology (energy, hunger, hydration), memory, and colony demand vectors.',
+    pheromoneParameters: {
+      baseSensitivity: 1.0,
+      depositionThreshold: 0.30,
+      recruitmentThreshold: 0.20,
+      trailFollowingBias: 0.80,
+      trailReinforcementRate: 0.70,
+      saturationInhibitionLevel: 8.0,
+      congestionInhibitionCount: 10,
+    },
+  },
+
   LEAFCUTTER_INSPIRED: {
     id: 'LEAFCUTTER_INSPIRED',
     name: 'Leaf-cutter Ant (Modelled Profile)',
@@ -99,6 +142,7 @@ export const SPECIES_PROFILES: Record<string, AntSpeciesProfile> = {
     foragingMode: 'PHYSICAL_TRAIL_AND_VEGETATION_HARVEST',
     communicationMode: 'STRIDULATION_ALARM_AND_ANTENNATION',
     cooperationMode: 'COLLECTIVE_CHOP_AND_TRANSPORT',
+    queenSuccessionStrategy: 'NONE', // Strict monogyny: loss of founding claustral queen cannot be replaced
     sensoryAssumptions: 'High olfactory sensitivity for trail following, mechanosensory stridulation perception.',
     behaviorAssumptions: 'Establishes persistent highways. Actively inhibits deposition when trail is already strongly marked or congested.',
     pheromoneParameters: {
@@ -132,6 +176,7 @@ export const SPECIES_PROFILES: Record<string, AntSpeciesProfile> = {
     foragingMode: 'TRAIL_AND_PATH_INTEGRATION',
     communicationMode: 'ANTENNATION_AND_STRIDULATION',
     cooperationMode: 'COOPERATIVE_HAULING',
+    queenSuccessionStrategy: 'QUEEN_ADOPTION_OR_MERGER', // Polygynous gyne adoption and nest budding
     sensoryAssumptions: 'Combines celestial polarized light compass (DRA) with chemosensory antennal tropotaxis.',
     behaviorAssumptions: 'Lays and reinforces chemical recruitment trails during return journeys when resource quality is high.',
     pheromoneParameters: {
@@ -165,6 +210,7 @@ export const SPECIES_PROFILES: Record<string, AntSpeciesProfile> = {
     foragingMode: 'SYSTEMATIC_SEARCH_AND_INTEGRATION',
     communicationMode: 'TACTILE_ONLY',
     cooperationMode: 'SOLITARY',
+    queenSuccessionStrategy: 'NONE', // Strict monogyny in harsh desert
     sensoryAssumptions: 'Ultra-high-precision celestial compass and step odometer.',
     behaviorAssumptions: 'Never deposits chemical food recruitment trails. Navigates purely via central complex path integration.',
     pheromoneParameters: {
@@ -198,6 +244,7 @@ export const SPECIES_PROFILES: Record<string, AntSpeciesProfile> = {
     foragingMode: 'TANDEM_LEADER_FOLLOWER',
     communicationMode: 'BIDIRECTIONAL_ANTENNAL_TAPPING',
     cooperationMode: 'DYADIC_COOPERATION',
+    queenSuccessionStrategy: 'QUEEN_REARING',
     sensoryAssumptions: 'Tactile perception of follower antennal contacts on leader hind legs.',
     behaviorAssumptions: 'Recruitment is one-to-one tandem running rather than mass chemical trails.',
     pheromoneParameters: {
@@ -210,6 +257,74 @@ export const SPECIES_PROFILES: Record<string, AntSpeciesProfile> = {
       congestionInhibitionCount: 2,
     },
   },
+
+  HARPEGNATHOS_SALTATOR: {
+    id: 'HARPEGNATHOS_SALTATOR',
+    name: 'Indian Jumping Ant',
+    scientificName: 'Harpegnathos saltator',
+    description: 'GAMERGATE REPRODUCTIVE SYSTEM: Ponerine ant with worker dominance tournaments and gamergate transformation following queen loss (Peeters et al., 2000; Sasaki et al., 2016).',
+    casteStructure: 'Monomorphic workers, Gamergates, Foundress',
+    workerSpecialization: 'Vision-guided solitary predation, jumping locomotion, dominance hierarchy',
+    foragingStrategy: 'Large optical visual hunting and stereoscopic jumping attacks on live prey',
+    recruitmentMechanism: 'Tandem running and solitary hunt',
+    pheromoneBehavior: 'Cuticular hydrocarbon dominance profiles and localized recruitment cues',
+    nestOrganization: 'Multi-tiered subterranean chambers with vaulted ceilings',
+    foodStrategy: 'Solitary active hunting of live insect prey',
+    defenseBehavior: 'Long-range visual detection, jumping strikes, and potent venomous stinging',
+    queenBroodBehavior: 'Gamergates and nurses groom and provision brood with masticated insect prey',
+    cooperationRules: 'Tandem calling and worker dominance tournaments for reproductive rights',
+    recruitmentMode: 'TANDEM_RUNNING',
+    pheromoneMode: 'SHORT_RANGE_MARKER',
+    foragingMode: 'SYSTEMATIC_SEARCH_AND_INTEGRATION',
+    communicationMode: 'ANTENNATION_AND_STRIDULATION',
+    cooperationMode: 'DYADIC_COOPERATION',
+    queenSuccessionStrategy: 'GAMERGATE_SUCCESSION',
+    sensoryAssumptions: 'High-resolution binocular vision with motion parallax depth estimation.',
+    behaviorAssumptions: 'Upon queen loss, workers stage antennal dueling tournaments; tournament winners transform physiologically into mated reproductive gamergates.',
+    pheromoneParameters: {
+      baseSensitivity: 0.4,
+      depositionThreshold: 0.5,
+      recruitmentThreshold: 0.4,
+      trailFollowingBias: 0.3,
+      trailReinforcementRate: 0.2,
+      saturationInhibitionLevel: 0.5,
+      congestionInhibitionCount: 3,
+    },
+  },
+
+  PRISTOMYRMEX_PUNGENS: {
+    id: 'PRISTOMYRMEX_PUNGENS',
+    name: 'Queenless Parthenogenetic Ant',
+    scientificName: 'Pristomyrmex punctatus',
+    description: 'QUEENLESS CLONAL REPRODUCTION: Completely lacks queen caste; all workers reproduce parthenogenetically via thelytoky (Tsuji, 1988).',
+    casteStructure: 'Queenless monomorphic clonal workers',
+    workerSpecialization: 'Age-dependent polyethism: young workers reproduce and nurse in nest, older workers forage and defend',
+    foragingStrategy: 'Mass recruitment to protein and sugar sources',
+    recruitmentMechanism: 'Mass trail recruitment',
+    pheromoneBehavior: 'Volatile trail pheromones and alarm recruitment',
+    nestOrganization: 'Nomadic and semi-permanent subterranean nest clusters',
+    foodStrategy: 'Omnivorous scavenging and honeydew collection',
+    defenseBehavior: 'Collective swarming and biting',
+    queenBroodBehavior: 'Communal brood care by young intranidal workers',
+    cooperationRules: 'Collective foraging, communal egg laying, and cooperative transport',
+    recruitmentMode: 'MASS_TRAIL_RECRUITMENT',
+    pheromoneMode: 'MODULATED_TRAIL',
+    foragingMode: 'TRAIL_AND_PATH_INTEGRATION',
+    communicationMode: 'ANTENNATION_AND_STRIDULATION',
+    cooperationMode: 'COOPERATIVE_HAULING',
+    queenSuccessionStrategy: 'QUEENLESS_REPRODUCTIVE_CYCLE',
+    sensoryAssumptions: 'Antennal chemoreception and collective alarm sensitivity.',
+    behaviorAssumptions: 'No queen needed; young workers autonomously enter reproductive egg-laying cycles inside the nest.',
+    pheromoneParameters: {
+      baseSensitivity: 1.0,
+      depositionThreshold: 0.3,
+      recruitmentThreshold: 0.2,
+      trailFollowingBias: 0.8,
+      trailReinforcementRate: 0.7,
+      saturationInhibitionLevel: 6.0,
+      congestionInhibitionCount: 8,
+    },
+  },
 };
 
-export const DEFAULT_SPECIES_PROFILE = SPECIES_PROFILES.LEAFCUTTER_INSPIRED;
+export const DEFAULT_SPECIES_PROFILE = SPECIES_PROFILES.GENERAL_ANT;

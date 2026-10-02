@@ -1,0 +1,60 @@
+{
+  "rules": {
+    "users": {
+      "$uid": {
+        ".read": "auth != null",
+        ".write": "auth != null && auth.uid == $uid",
+        ".validate": "newData.hasChildren(['uid']) && newData.child('uid').val() == $uid"
+      }
+    },
+    "modelReleases": {
+      ".read": true,
+      ".write": "auth != null && auth.token.admin == true",
+      "$modelId": {
+        ".validate": "newData.hasChildren(['id', 'name', 'version', 'checksum', 'neuronCount'])"
+      }
+    },
+    "downloadEvents": {
+      ".read": true,
+      "$eventId": {
+        ".write": "!data.exists() && newData.exists()",
+        ".validate": "newData.hasChildren(['downloadEventId', 'modelId', 'modelVersion', 'timestamp', 'uid']) && newData.child('timestamp').val() <= now && newData.child('uid').val().length <= 128"
+      }
+    },
+    "feedback": {
+      ".read": true,
+      "$feedbackId": {
+        ".write": "!data.exists() || (auth != null && (auth.uid == data.child('uid').val() || auth.token.admin == true))",
+        ".validate": "newData.hasChildren(['feedbackId', 'title', 'body', 'type', 'createdAt', 'status']) && newData.child('title').val().length >= 3 && newData.child('title').val().length <= 150 && newData.child('body').val().length >= 10 && newData.child('body').val().length <= 2000"
+      }
+    },
+    "comments": {
+      ".read": true,
+      "$commentId": {
+        ".write": "!data.exists() || (auth != null && (auth.uid == data.child('uid').val() || auth.token.admin == true))",
+        ".validate": "newData.hasChildren(['commentId', 'uid', 'body', 'targetId', 'targetType', 'createdAt', 'status']) && newData.child('body').val().length >= 3 && newData.child('body').val().length <= 1500"
+      }
+    },
+    "featureRequests": {
+      ".read": true,
+      "$requestId": {
+        ".write": "!data.exists() || auth != null",
+        ".validate": "newData.hasChildren(['requestId', 'title', 'description', 'createdAt', 'status']) && newData.child('title').val().length >= 3 && newData.child('title').val().length <= 150 && newData.child('description').val().length >= 10 && newData.child('description').val().length <= 2000"
+      }
+    },
+    "bugReports": {
+      ".read": true,
+      "$reportId": {
+        ".write": "!data.exists() || (auth != null && (auth.uid == data.child('uid').val() || auth.token.admin == true))",
+        ".validate": "newData.hasChildren(['reportId', 'title', 'description', 'severity', 'createdAt', 'status']) && newData.child('title').val().length >= 3 && newData.child('title').val().length <= 150 && newData.child('description').val().length >= 10 && newData.child('description').val().length <= 2000"
+      }
+    },
+    "publicExperiments": {
+      ".read": true,
+      "$experimentId": {
+        ".write": "!data.exists() || (auth != null && (auth.uid == data.child('authorId').val() || auth.token.admin == true))",
+        ".validate": "newData.hasChildren(['experimentId', 'title', 'modelVersion', 'environment', 'task', 'createdAt']) && newData.child('title').val().length >= 5 && newData.child('title').val().length <= 150 && newData.child('description').val().length <= 2000"
+      }
+    }
+  }
+}

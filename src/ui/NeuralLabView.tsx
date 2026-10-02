@@ -62,6 +62,7 @@ import {
   Maximize,
   GitCommit,
   ArrowDown,
+  Compass,
 } from 'lucide-react';
 import * as THREE from 'three';
 
@@ -289,9 +290,10 @@ export const NeuralLabView: React.FC<NeuralLabViewProps> = ({ selectedAnt }) => 
     singleNeuronGroup.add(somaMesh);
 
     const haloMesh = new THREE.Mesh(
-      new THREE.RingGeometry(0.065, 0.075, 24),
-      new THREE.MeshBasicMaterial({ color: 0x38bdf8, side: THREE.DoubleSide, transparent: true, opacity: 0.85 })
+      new THREE.RingGeometry(0.08, 0.12, 32),
+      new THREE.MeshBasicMaterial({ color: 0x38bdf8, side: THREE.DoubleSide, transparent: true, opacity: 0.95, depthTest: false, depthWrite: false, blending: THREE.AdditiveBlending })
     );
+    haloMesh.renderOrder = 9999;
     singleNeuronGroup.add(haloMesh);
 
     const dendriteGeo = new THREE.BufferGeometry();
@@ -461,6 +463,8 @@ export const NeuralLabView: React.FC<NeuralLabViewProps> = ({ selectedAnt }) => 
         somaMesh.position.set(nx, ny, nz);
         haloMesh.position.set(nx, ny, nz);
         haloMesh.lookAt(camera.position);
+        const ringPulse = 1.0 + Math.sin(clock * 6.0) * 0.18;
+        haloMesh.scale.set(ringPulse, ringPulse, ringPulse);
 
         const regId = brain55k.regionIds[selectedNeuronIndex];
         const regDef = SYNTHETIC_NEUROPIL_REGIONS[regId] || SYNTHETIC_NEUROPIL_REGIONS[0];
@@ -615,7 +619,7 @@ export const NeuralLabView: React.FC<NeuralLabViewProps> = ({ selectedAnt }) => 
       trainingEnvironment: { worldSize: 60, obstacleDensity: 0.1, predatorPresence: false, temperature: 24 },
       task: selectedTask === 'MARKET_BENCHMARK' ? 'FORAGE' : selectedTask,
       rewardDefinition: { foodReward: 10, nestDeliveryReward: 15, energyPenalty: 0.1, deathPenalty: 20 },
-      species: 'ANT_BRAIN_SYNTHETIC_55K',
+      species: 'ANTWIRE_SYNTHETIC_55K',
       inputSchema: ['foodL', 'foodC', 'foodR'],
       outputSchema: ['throttle', 'turn'],
       normalization: {},
@@ -976,6 +980,136 @@ export const NeuralLabView: React.FC<NeuralLabViewProps> = ({ selectedAnt }) => 
             >
               Inject Phasic Dopamine Burst (+0.75)
             </button>
+          </div>
+
+          {/* Neuropolis Central Complex (CX) 16-Wedge Ring Attractor & PI Navigation Card */}
+          <div className="p-2.5 rounded bg-slate-900/90 border border-purple-500/40 space-y-2 text-[10px]">
+            <div className="flex items-center justify-between text-purple-300 font-bold border-b border-slate-800 pb-1">
+              <span className="flex items-center gap-1.5 text-cyan-300">
+                <Compass className="w-3.5 h-3.5 text-cyan-400 animate-spin-slow" /> Central Complex (CX) Ring Attractor
+              </span>
+              <span className="text-[8.5px] font-mono text-purple-400">
+                {((((selectedAnt?.controller as any)?.latestBrainSnapshot?.centralComplex?.estimatedHeading ?? (selectedAnt?.body?.heading ?? 0)) * 180) / Math.PI).toFixed(0)}° Heading
+              </span>
+            </div>
+
+            {/* Circular 16-Wedge Attractor Ring & Reticle */}
+            <div className="flex items-center justify-between px-2 py-1.5 bg-slate-950/90 rounded border border-slate-800 relative">
+              <div className="relative w-24 h-24 flex items-center justify-center shrink-0">
+                {/* Center Compass Reticle & Rotating Heading Needle */}
+                <div className="w-7 h-7 rounded-full bg-cyan-950/90 border border-cyan-500/50 flex items-center justify-center font-mono text-cyan-300 font-bold relative overflow-hidden shadow-[0_0_8px_rgba(6,182,212,0.3)]">
+                  <div
+                    className="absolute w-0.5 h-3 bg-gradient-to-t from-cyan-500 to-white rounded-full origin-bottom transition-transform duration-100 shadow-[0_0_6px_#38bdf8]"
+                    style={{
+                      top: '1.5px',
+                      left: 'calc(50% - 1px)',
+                      transformOrigin: '50% 100%',
+                      transform: `rotate(${(((selectedAnt?.controller as any)?.latestBrainSnapshot?.centralComplex?.estimatedHeading ?? (selectedAnt?.body?.heading ?? 0)) * 180) / Math.PI}deg)`
+                    }}
+                  />
+                  <span className="z-10 bg-slate-950/90 px-0.5 rounded text-[7px] font-bold text-cyan-200">EB</span>
+                </div>
+
+                {/* 16 Wedge Column Neurons around circle */}
+                {(() => {
+                  const bioSnap = (selectedAnt?.controller as any)?.latestBrainSnapshot?.centralComplex;
+                  const activeHead = bioSnap?.estimatedHeading ?? (selectedAnt?.body?.heading ?? 0);
+                  const ring: number[] = bioSnap?.headingRing
+                    ? Array.from(bioSnap.headingRing as number[])
+                    : Array.from({ length: 16 }).map((_, idx) => {
+                        const wedgeAngle = (idx / 16) * Math.PI * 2;
+                        let diff = activeHead - wedgeAngle;
+                        while (diff > Math.PI) diff -= Math.PI * 2;
+                        while (diff < -Math.PI) diff += Math.PI * 2;
+                        const sigma = (Math.PI * 2) / 16;
+                        return Math.exp(-(diff * diff) / (2 * sigma * sigma));
+                      });
+
+                  return ring.map((activationVal, idx) => {
+                    const activation = typeof activationVal === 'number' ? activationVal : 0;
+                    const angle = (idx / 16) * Math.PI * 2 - Math.PI / 2;
+                    const radius = 36; // pixels
+                    const x = Math.cos(angle) * radius;
+                    const y = Math.sin(angle) * radius;
+                    const isPeak = activation > 0.65;
+
+                    return (
+                      <div
+                        key={idx}
+                        className={`absolute w-2.5 h-2.5 rounded-full transition-all duration-150 transform -translate-x-1/2 -translate-y-1/2 ${
+                          isPeak
+                            ? 'bg-cyan-300 shadow-md shadow-cyan-400 border border-white scale-125 z-10'
+                            : activation > 0.2
+                            ? 'bg-cyan-500/90 shadow-sm shadow-cyan-500 scale-100'
+                            : 'bg-slate-800/80 scale-75'
+                        }`}
+                        style={{ left: `calc(50% + ${x}px)`, top: `calc(50% + ${y}px)` }}
+                        title={`EB Wedge ${idx + 1}: ${(activation * 100).toFixed(0)}% firing`}
+                      />
+                    );
+                  });
+                })()}
+              </div>
+
+              {/* Path Integration Telemetry Column */}
+              <div className="flex flex-col items-end text-[9.5px] font-mono gap-1 text-slate-300 pl-2">
+                <div className="text-slate-500 text-[8.5px] font-sans uppercase font-bold tracking-wider">Fan-Shaped Body (FB)</div>
+                <div className="flex items-center gap-1">
+                  <span className="text-slate-400">Home Vector:</span>
+                  <span className="text-emerald-400 font-bold">
+                    {((selectedAnt?.controller as any)?.latestBrainSnapshot?.centralComplex?.homeVectorDistance ?? 14.2).toFixed(1)}m
+                  </span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="text-slate-400">Heading:</span>
+                  <span className="text-cyan-300 font-bold">
+                    {((((selectedAnt?.controller as any)?.latestBrainSnapshot?.centralComplex?.homeVectorAngle ?? ((selectedAnt?.body?.heading ?? 0) + 2.1)) * 180) / Math.PI).toFixed(0)}°
+                  </span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="text-slate-400">PI Conf:</span>
+                  <span className="text-amber-300 font-bold">
+                    {(((selectedAnt?.controller as any)?.latestBrainSnapshot?.centralComplex?.pathIntegrationConfidence ?? 0.94) * 100).toFixed(0)}%
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Protocerebral Bridge (PB) 16-Glomeruli Column Firing Profile */}
+            <div className="space-y-0.5 pt-0.5">
+              <div className="flex justify-between items-center text-[8.5px] font-mono text-slate-400">
+                <span>Protocerebral Bridge (PB) E-PG Glomeruli</span>
+                <span className="text-cyan-400">16 Columns</span>
+              </div>
+              <div className="h-3 bg-slate-950/80 rounded border border-slate-800 p-0.5 flex gap-0.5 items-end">
+                {(() => {
+                  const bioSnap = (selectedAnt?.controller as any)?.latestBrainSnapshot?.centralComplex;
+                  const activeHead = bioSnap?.estimatedHeading ?? (selectedAnt?.body?.heading ?? 0);
+                  const ring: number[] = bioSnap?.headingRing
+                    ? Array.from(bioSnap.headingRing as number[])
+                    : Array.from({ length: 16 }).map((_, idx) => {
+                        const wedgeAngle = (idx / 16) * Math.PI * 2;
+                        let diff = activeHead - wedgeAngle;
+                        while (diff > Math.PI) diff -= Math.PI * 2;
+                        while (diff < -Math.PI) diff += Math.PI * 2;
+                        const sigma = (Math.PI * 2) / 16;
+                        return Math.exp(-(diff * diff) / (2 * sigma * sigma));
+                      });
+
+                  return ring.map((val, idx) => (
+                    <div
+                      key={idx}
+                      className="flex-1 bg-cyan-500 rounded-t-sm transition-all duration-150"
+                      style={{
+                        height: `${Math.max(10, Math.min(100, val * 100))}%`,
+                        backgroundColor: val > 0.65 ? '#67e8f9' : val > 0.2 ? '#06b6d4' : '#1e293b'
+                      }}
+                      title={`PB Column ${idx + 1}: ${(val * 100).toFixed(0)}%`}
+                    />
+                  ));
+                })()}
+              </div>
+            </div>
           </div>
 
           {/* Directional Neuropathway Flow Card */}

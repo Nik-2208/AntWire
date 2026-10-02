@@ -105,9 +105,9 @@ export class AntBodyState {
     }
 
     // 4. Somatic Health Deterioration from Starvation & Senescence
-    if (this.state.starvationStress > 0.5) {
+    if (this.state.starvationStress > 0.10) {
       // Progressive tissue damage proportional to starvation stress
-      const damageRate = (this.state.starvationStress - 0.5) * 0.08 * dt;
+      const damageRate = (this.state.starvationStress - 0.10) * 0.15 * dt;
       this.state.health = Math.max(0, this.state.health - damageRate);
     }
 
@@ -205,7 +205,7 @@ export class AntBodyState {
 
   /**
    * Stomodeal trophallactic social food exchange between two compatible nestmates.
-   * Conserves exact total resource quantity between donor and receiver.
+   * Conserves exact total resource quantity between donor and receiver, directly nourishing receiver.
    */
   public transferFoodTo(recipient: AntBodyState, maxTransfer: number = 1.5): number {
     if (this.state.carryingFoodAmount <= 0) return 0;
@@ -214,7 +214,13 @@ export class AntBodyState {
     if (transferable < 0.05) return 0;
 
     this.state.carryingFoodAmount -= transferable;
-    recipient.state.carryingFoodAmount += transferable;
+    
+    // Immediate metabolic nutrition if hungry, surplus into carrying cargo
+    if (recipient.state.energyReserve < 0.85) {
+      recipient.feed(transferable);
+    } else {
+      recipient.state.carryingFoodAmount += transferable;
+    }
     return transferable;
   }
 

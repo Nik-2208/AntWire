@@ -25,6 +25,7 @@ import {
   Save,
 } from 'lucide-react';
 import { SimulationWorld } from '../simulation/world';
+import { AntWireLogo } from './AntWireLogo';
 
 interface SettingsViewProps {
   world: SimulationWorld;
@@ -352,7 +353,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       {activeCategory === 'ABOUT' && (
         <div className="flex flex-col gap-3 bg-slate-950/70 p-4 rounded-xl border border-slate-800 font-mono text-xs">
           <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-            <span className="font-bold text-cyan-400 text-sm">ANTWIRE — System Attribution</span>
+            <AntWireLogo size="sm" showSubtitle={false} showBadge={false} glowEffect={false} />
             <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-950/80 border border-emerald-700/50 text-emerald-300">
               © 2026 Nikhilesh H. Chavda
             </span>

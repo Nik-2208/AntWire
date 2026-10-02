@@ -7,6 +7,7 @@ import React, { useState } from 'react';
 import { WorldConfig } from '../simulation/world';
 import { Colony } from '../colony/colony';
 import { WorkerRole } from '../simulation/types';
+import { AntWireLogo } from './AntWireLogo';
 import { Trash2, Users, Bug, AlertTriangle, X, ShieldAlert, Check } from 'lucide-react';
 import { SeededRNG } from '../simulation/rng';
 
@@ -51,10 +52,10 @@ export const EntityManagementModal: React.FC<EntityManagementModalProps> = ({
       <div className="glass-panel border border-rose-500/50 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-5 select-none relative">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-rose-900/60 pb-3">
-          <div className="flex items-center gap-2.5">
-            <Trash2 className="w-5 h-5 text-rose-400" />
+          <div className="flex items-center gap-3">
+            <AntWireLogo size="sm" showSubtitle={false} showBadge={false} glowEffect={false} />
             <h2 className="text-base font-bold text-slate-100 font-heading">
-              Entity Management & Safe Removal
+              Entity Management & Removal
             </h2>
           </div>
           <button

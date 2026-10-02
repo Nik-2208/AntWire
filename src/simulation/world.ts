@@ -274,6 +274,10 @@ export class SimulationWorld {
     return this.predatorManager.spawnPredator(pos, type, this.rng.range(0, Math.PI * 2), this.eventBus);
   }
 
+  public getPredatorById(id: string): Predator | undefined {
+    return this.predatorManager.getPredatorById(id);
+  }
+
   public removePredator(id: string): boolean {
     return this.predatorManager.removePredator(id, this.eventBus);
   }
@@ -306,8 +310,14 @@ export class SimulationWorld {
     // 1. Sync live configuration to systems
     this.pheromones.config.decayRates[0] = this.simConfig.pheromones.foodTrailDecay;
     this.pheromones.config.decayRates[1] = this.simConfig.pheromones.homeTrailDecay;
-    this.pheromones.config.decayRates[2] = this.simConfig.pheromones.alarmTrailDecay;
+    this.pheromones.config.decayRates[2] = this.simConfig.pheromones.foodTrailDecay * 1.2;
+    this.pheromones.config.decayRates[3] = this.simConfig.pheromones.alarmTrailDecay;
+    this.pheromones.config.decayRates[4] = 0.04;
+    this.pheromones.config.decayRates[5] = this.simConfig.pheromones.homeTrailDecay * 1.1;
     this.pheromones.config.diffusionRates[0] = this.simConfig.pheromones.diffusionRate;
+    this.pheromones.config.diffusionRates[1] = this.simConfig.pheromones.diffusionRate * 0.9;
+    this.pheromones.config.diffusionRates[2] = this.simConfig.pheromones.diffusionRate * 1.1;
+    this.pheromones.config.diffusionRates[3] = this.simConfig.pheromones.diffusionRate * 1.5;
     this.environment.config.temperatureCelsius = this.simConfig.environment.temperatureCelsius;
 
     // 2. Update Environment (Atmosphere, Diurnal cycle, Temperature)

@@ -39,11 +39,12 @@ export class PheromoneOverlay {
       transparent: true,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
-      opacity: 0.95,
+      opacity: 0.55,
     });
 
     this.mesh = new THREE.Mesh(geo, mat);
-    this.mesh.position.y = 0.05; // Slightly above ground to prevent z-fighting
+    this.mesh.position.y = 0.06; // Elevated above terrain (0.0) and grid (0.02)
+    this.mesh.renderOrder = 3;
   }
 
   /**
@@ -59,30 +60,56 @@ export class PheromoneOverlay {
     const data = this.imgData.data;
     const foodChannel = field.channels[0];
     const homeChannel = field.channels[1];
-    const alarmChannel = field.channels[2];
+    const recruitmentChannel = field.channels[2];
+    const dangerChannel = field.channels[3];
+    const taskChannel = field.channels[4];
+    const exploreChannel = field.channels[5];
     const totalPixels = this.res * this.res;
 
     for (let i = 0; i < totalPixels; i++) {
-      const fVal = foodChannel[i] / field.config.maxConcentration;
-      const hVal = homeChannel[i] / field.config.maxConcentration;
-      const aVal = alarmChannel[i] / field.config.maxConcentration;
+      const fRaw = foodChannel ? foodChannel[i] : 0;
+      const hRaw = homeChannel ? homeChannel[i] : 0;
+      const rRaw = recruitmentChannel ? recruitmentChannel[i] : 0;
+      const dRaw = dangerChannel ? dangerChannel[i] : 0;
+      const tRaw = taskChannel ? taskChannel[i] : 0;
+      const eRaw = exploreChannel ? exploreChannel[i] : 0;
 
       const pIdx = i * 4;
 
-      if (fVal < 0.01 && hVal < 0.01 && aVal < 0.01) {
-        data[pIdx + 3] = 0; // Transparent
+      if (fRaw < 0.005 && hRaw < 0.005 && rRaw < 0.005 && dRaw < 0.005 && tRaw < 0.005 && eRaw < 0.005) {
+        data[pIdx] = 0;
+        data[pIdx + 1] = 0;
+        data[pIdx + 2] = 0;
+        data[pIdx + 3] = 0;
         continue;
       }
 
-      // Additive color composition:
-      // Food Trail = Emerald Green (R=16, G=185, B=129)
-      // Home Trail = Electric Cyan (R=6, G=182, B=212)
-      // Alarm Trail = Crimson Red (R=239, G=68, B=68)
+      // Smooth, natural linear-gamma scaling (balanced, non-glaring)
+      const fNorm = Math.min(1.0, Math.pow(fRaw / 2.2, 0.8));
+      const hNorm = Math.min(1.0, Math.pow(hRaw / 2.2, 0.8));
+      const rNorm = Math.min(1.0, Math.pow(rRaw / 2.0, 0.8));
+      const dNorm = Math.min(1.0, Math.pow(dRaw / 1.8, 0.8));
+      const tNorm = Math.min(1.0, Math.pow(tRaw / 1.8, 0.8));
+      const eNorm = Math.min(1.0, Math.pow(eRaw / 2.2, 0.8));
 
-      const r = Math.min(255, Math.round(fVal * 16 + hVal * 6 + aVal * 239));
-      const g = Math.min(255, Math.round(fVal * 185 + hVal * 182 + aVal * 68));
-      const b = Math.min(255, Math.round(fVal * 129 + hVal * 212 + aVal * 68));
-      const alpha = Math.min(240, Math.round((fVal * 1.2 + hVal * 0.9 + aVal * 1.5) * 255));
+      const maxNorm = Math.max(fNorm, hNorm, rNorm, dNorm, tNorm, eNorm);
+      if (maxNorm < 0.01) {
+        data[pIdx + 3] = 0;
+        continue;
+      }
+
+      // Refined, soft bio-chemical palette (restrained, realistic chemical gradients):
+      // Food Trail: Soft Organic Emerald (16, 185, 110)
+      // Home / Scout Trail: Muted Electric Cyan (6, 160, 205)
+      // Recruitment: Warm Amber (210, 140, 20)
+      // Danger / Alarm: Soft Crimson (200, 40, 60)
+      // Task Stigmergy: Subdued Violet (140, 70, 210)
+      // Explore Territory: Muted Azure (45, 150, 200)
+
+      const r = Math.min(255, Math.round(fNorm * 16 + hNorm * 6 + rNorm * 210 + dNorm * 200 + tNorm * 140 + eNorm * 45));
+      const g = Math.min(255, Math.round(fNorm * 185 + hNorm * 160 + rNorm * 140 + dNorm * 40 + tNorm * 70 + eNorm * 150));
+      const b = Math.min(255, Math.round(fNorm * 110 + hNorm * 205 + rNorm * 20 + dNorm * 60 + tNorm * 210 + eNorm * 200));
+      const alpha = Math.min(180, Math.round(maxNorm * 135 + 15));
 
       data[pIdx] = r;
       data[pIdx + 1] = g;

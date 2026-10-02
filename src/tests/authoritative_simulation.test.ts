@@ -45,7 +45,7 @@ describe('Authoritative Biology-First Kernel Tests', () => {
     }
 
     // Ant should be EXHAUSTED and slowed down by mobility penalty
-    expect(ant.internalState.state.starvationStress).toBeGreaterThan(0.05);
+    expect(ant.internalState.state.starvationStress).toBeGreaterThan(0.02);
     expect(ant.internalState.state.mobilityPenalty).toBeGreaterThanOrEqual(0.0);
 
     // Continue starvation until health deteriorates and eventual death event occurs

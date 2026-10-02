@@ -305,9 +305,10 @@ export const FullscreenAntBrainViewer: React.FC<FullscreenAntBrainViewerProps> =
     const somaMesh = new THREE.Mesh(somaGeo, somaMat);
     singleNeuronGroup.add(somaMesh);
 
-    const haloGeo = new THREE.RingGeometry(0.065, 0.075, 24);
-    const haloMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, side: THREE.DoubleSide, transparent: true, opacity: 0.8 });
+    const haloGeo = new THREE.RingGeometry(0.08, 0.12, 32);
+    const haloMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, side: THREE.DoubleSide, transparent: true, opacity: 0.95, depthTest: false, depthWrite: false, blending: THREE.AdditiveBlending });
     const haloMesh = new THREE.Mesh(haloGeo, haloMat);
+    haloMesh.renderOrder = 9999;
     singleNeuronGroup.add(haloMesh);
 
     // Dendritic tree branch lines
@@ -583,6 +584,8 @@ export const FullscreenAntBrainViewer: React.FC<FullscreenAntBrainViewerProps> =
         somaMesh.position.set(nx, ny, nz);
         haloMesh.position.set(nx, ny, nz);
         haloMesh.lookAt(camera.position);
+        const ringPulse = 1.0 + Math.sin(clock * 6.0) * 0.18;
+        haloMesh.scale.set(ringPulse, ringPulse, ringPulse);
 
         const regId = brain.regionIds[inspectedNeuronId];
         const regDef = SYNTHETIC_NEUROPIL_REGIONS[regId] || SYNTHETIC_NEUROPIL_REGIONS[0];
@@ -999,6 +1002,112 @@ export const FullscreenAntBrainViewer: React.FC<FullscreenAntBrainViewerProps> =
 
           {rightPanelOpen && (
             <div className="flex flex-col gap-2 max-h-[calc(100vh-140px)] overflow-y-auto no-scrollbar pr-0.5">
+              {/* Central Complex (CX) 16-Wedge Ring Attractor & Path Integration Card */}
+              <div className="p-3 rounded-xl bg-slate-950/85 border border-purple-500/40 backdrop-blur-md shadow-2xl space-y-2 text-[11px]">
+                <div className="flex items-center justify-between text-slate-200 font-bold border-b border-slate-800/80 pb-1.5">
+                  <span className="flex items-center gap-1.5 text-cyan-300">
+                    <Compass className="w-3.5 h-3.5 text-cyan-400" /> Central Complex (CX) Ring Attractor
+                  </span>
+                  <span className="text-[9px] font-mono text-purple-400">EB / FB / PB</span>
+                </div>
+
+                {/* Circular 16-Wedge Attractor Ring */}
+                <div className="flex items-center justify-between px-2 py-2 bg-slate-950/90 rounded-lg border border-slate-800 relative">
+                  <div className="relative w-28 h-28 flex items-center justify-center shrink-0">
+                    {/* Center EB reticle with rotating needle */}
+                    <div className="w-8 h-8 rounded-full bg-cyan-950/90 border border-cyan-500/50 flex items-center justify-center font-mono text-cyan-300 font-bold relative overflow-hidden shadow-[0_0_10px_rgba(6,182,212,0.35)]">
+                      <div
+                        className="absolute w-0.5 h-4 bg-gradient-to-t from-cyan-500 to-white rounded-full transition-transform duration-100 shadow-[0_0_6px_#38bdf8]"
+                        style={{
+                          top: '2px',
+                          left: 'calc(50% - 1px)',
+                          transformOrigin: '50% 100%',
+                          transform: `rotate(${((brain?.neuronCount ?? 0) % 628) / 10}deg)`
+                        }}
+                      />
+                      <span className="z-10 bg-slate-950/90 px-0.5 rounded text-[8px] font-bold text-cyan-200">EB</span>
+                    </div>
+
+                    {/* 16 Wedge Neurons arranged in ring */}
+                    {Array.from({ length: 16 }).map((_, idx) => {
+                      const phaseAngle = ((brain?.neuronCount ?? 0) % 628) / 100;
+                      const wedgeAngle = (idx / 16) * Math.PI * 2;
+                      let diff = phaseAngle - wedgeAngle;
+                      while (diff > Math.PI) diff -= Math.PI * 2;
+                      while (diff < -Math.PI) diff += Math.PI * 2;
+                      const sigma = (Math.PI * 2) / 16;
+                      const activation = Math.exp(-(diff * diff) / (2 * sigma * sigma));
+                      const angle = (idx / 16) * Math.PI * 2 - Math.PI / 2;
+                      const radius = 44;
+                      const x = Math.cos(angle) * radius;
+                      const y = Math.sin(angle) * radius;
+                      const isPeak = activation > 0.65;
+                      return (
+                        <div
+                          key={idx}
+                          className={`absolute w-3 h-3 rounded-full transition-all duration-150 transform -translate-x-1/2 -translate-y-1/2 ${
+                            isPeak
+                              ? 'bg-cyan-300 shadow-md shadow-cyan-400 border border-white scale-125 z-10'
+                              : activation > 0.2
+                              ? 'bg-cyan-500/90 shadow-sm shadow-cyan-500 scale-100'
+                              : 'bg-slate-800/80 scale-75'
+                          }`}
+                          style={{ left: `calc(50% + ${x}px)`, top: `calc(50% + ${y}px)` }}
+                          title={`EB Wedge ${idx + 1}: ${(activation * 100).toFixed(0)}% firing`}
+                        />
+                      );
+                    })}
+                  </div>
+
+                  {/* Path Integration Telemetry */}
+                  <div className="flex flex-col items-end text-[10px] font-mono gap-1.5 text-slate-300 pl-2">
+                    <div className="text-slate-500 text-[9px] font-sans uppercase font-bold tracking-wider">Fan-Shaped Body (FB)</div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-slate-400">Home Vector:</span>
+                      <span className="text-emerald-400 font-bold">14.2m</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-slate-400">Heading:</span>
+                      <span className="text-cyan-300 font-bold">{(((brain?.neuronCount ?? 0) % 628) / 10).toFixed(0)}°</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-slate-400">PI Conf:</span>
+                      <span className="text-amber-300 font-bold">94%</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* PB 16-Glomeruli Column Firing Bars */}
+                <div className="space-y-0.5">
+                  <div className="flex justify-between items-center text-[9px] font-mono text-slate-400">
+                    <span>Protocerebral Bridge (PB) E-PG Columns</span>
+                    <span className="text-cyan-400">16</span>
+                  </div>
+                  <div className="h-4 bg-slate-950/80 rounded border border-slate-800 p-0.5 flex gap-0.5 items-end">
+                    {Array.from({ length: 16 }).map((_, idx) => {
+                      const phaseAngle = ((brain?.neuronCount ?? 0) % 628) / 100;
+                      const wedgeAngle = (idx / 16) * Math.PI * 2;
+                      let diff = phaseAngle - wedgeAngle;
+                      while (diff > Math.PI) diff -= Math.PI * 2;
+                      while (diff < -Math.PI) diff += Math.PI * 2;
+                      const sigma = (Math.PI * 2) / 16;
+                      const val = Math.exp(-(diff * diff) / (2 * sigma * sigma));
+                      return (
+                        <div
+                          key={idx}
+                          className="flex-1 rounded-t-sm transition-all duration-150"
+                          style={{
+                            height: `${Math.max(10, Math.min(100, val * 100))}%`,
+                            backgroundColor: val > 0.65 ? '#67e8f9' : val > 0.2 ? '#06b6d4' : '#1e293b'
+                          }}
+                          title={`PB Column ${idx + 1}: ${(val * 100).toFixed(0)}%`}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
               {/* Directional Neuropathway Flow Card */}
               <div className="p-3 rounded-xl bg-slate-950/85 border border-slate-800/80 backdrop-blur-md shadow-2xl space-y-2 text-[11px]">
                 <div className="flex items-center justify-between text-slate-200 font-bold border-b border-slate-800/80 pb-1.5">

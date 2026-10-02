@@ -10,6 +10,7 @@ import { REFERENCE_BRAIN_REGIONS } from '../ants/brain/connectome';
 import { ScientificBadge } from './ScientificBadge';
 import { DatasetExporter } from '../learning/dataset_exporter';
 import { TrajectoryLogger } from '../learning/trajectory_logger';
+import { AntWireLogo } from './AntWireLogo';
 import { Database, Download, BookOpen, ExternalLink, FileText, CheckCircle2, MessageSquarePlus } from 'lucide-react';
 
 interface DataHubViewProps {
@@ -37,8 +38,8 @@ export const DataHubView: React.FC<DataHubViewProps> = ({ trajectoryLogger }) =>
     <div className="flex flex-col gap-3 p-4 bg-slate-900/90 border border-slate-800 rounded-2xl text-slate-200 text-xs shadow-xl backdrop-blur-md overflow-y-auto max-h-[85vh]">
       {/* Title */}
       <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
-        <div className="flex items-center gap-2">
-          <Database className="w-5 h-5 text-cyan-400" />
+        <div className="flex items-center gap-3">
+          <AntWireLogo size="sm" showSubtitle={false} showBadge={false} glowEffect={false} />
           <div>
             <h2 className="text-sm font-bold font-heading text-slate-100">DATA HUB & SCIENTIFIC PROVENANCE</h2>
             <p className="text-[10px] text-slate-400">Literature Citations, Reference Atlases & Open Datasets</p>

@@ -9,7 +9,7 @@ import { Ant } from '../ants/ant';
 import { Queen } from './queen';
 import { BroodManager } from './brood';
 import { NestStructure } from './nest';
-import { CauseOfDeath, ColonyControlMode, ColonyNeedsVector, ColonyStatus, Vector2D, WorkerRole } from '../simulation/types';
+import { CauseOfDeath, ColonyControlMode, ColonyLifecyclePhase, ColonyNeedsVector, ColonyStatus, Vector2D, WorkerRole } from '../simulation/types';
 import { Predator } from '../predators/predator';
 import { SeededRNG } from '../simulation/rng';
 import { SimulationConfig } from '../simulation/config';
@@ -20,6 +20,8 @@ import { ColonyCommunicationBus } from './communication';
 import { CollaborativeTaskManager } from './collaborative_tasks';
 import { AuthoritativeRewardEngine } from '../simulation/authoritative_reward_engine';
 import { PheromoneDecisionEngine } from '../ants/pheromone_decision';
+import { QueenSuccessionManager } from './queen_succession';
+import { AntSpeciesProfile, DEFAULT_SPECIES_PROFILE } from '../ants/species_profile';
 
 export interface FoodFlowEdge {
   id: string;
@@ -45,6 +47,7 @@ export interface ColonyStatistics {
   averageWorkerHealth: number;
   colonyAgeSeconds: number;
   status: ColonyStatus;
+  lifecyclePhase: ColonyLifecyclePhase;
   controlMode: ColonyControlMode;
   corpsesWaitingRemoval: number;
   nestChambersCount: number;
@@ -82,8 +85,11 @@ export class Colony {
   public brood: BroodManager;
   public ants: Ant[] = [];
   public status: ColonyStatus = 'HEALTHY';
+  public lifecyclePhase: ColonyLifecyclePhase = 'FOUNDING';
   public controlMode: ColonyControlMode = 'AUTONOMOUS';
   public roleManager: ColonyRoleManager = new ColonyRoleManager();
+  public speciesProfile: AntSpeciesProfile = DEFAULT_SPECIES_PROFILE;
+  public queenSuccession: QueenSuccessionManager;
 
   // Distributed superorganism communication & cooperative task systems
   public communicationBus: ColonyCommunicationBus = new ColonyCommunicationBus();
@@ -125,6 +131,7 @@ export class Colony {
     this.nest = new NestStructure(nestEntrance);
     this.queen = new Queen(id, { x: nestEntrance.x - 1.0, y: nestEntrance.y + 4.0 });
     this.brood = new BroodManager();
+    this.queenSuccession = new QueenSuccessionManager(id);
     this.creationTime = performance.now() / 1000;
   }
 
@@ -353,30 +360,49 @@ export class Colony {
     }
 
     // 1. Update Queen metabolism and egg laying
-    const { shouldLayEgg, foodConsumed: requestedQueenFood } = this.queen.update(dt, this.foodStore);
-    if (requestedQueenFood > 0) {
-      const { retrieved } = this.nest.retrieveFoodFromStorage(requestedQueenFood, this.queen.position);
-      if (retrieved > 0 && ledger) {
-        ledger.recordConsumption(retrieved);
+    if (this.queen && this.queen.metrics.health > 0) {
+      const { shouldLayEgg, foodConsumed: requestedQueenFood } = this.queen.update(dt, this.foodStore);
+      if (requestedQueenFood > 0) {
+        const { retrieved } = this.nest.retrieveFoodFromStorage(requestedQueenFood, this.queen.position);
+        if (retrieved > 0 && ledger) {
+          ledger.recordConsumption(retrieved);
+        }
+      }
+
+      if (shouldLayEgg) {
+        const nurseryChamber = this.nest.getChamberByType('BROOD_NURSERY') || this.nest.chambers[2];
+        const eggPos = {
+          x: nurseryChamber.position.x + rng.range(-1.0, 1.0),
+          y: nurseryChamber.position.y + rng.range(-1.0, 1.0),
+        };
+        this.brood.spawnEgg(eggPos);
+        if (eventBus) {
+          eventBus.emit({
+            type: 'QUEEN_LAID_EGG',
+            timestamp: simTime,
+            entityId: this.queen.id,
+            colonyId: this.id,
+            data: { position: eggPos },
+          });
+        }
       }
     }
 
-    if (shouldLayEgg) {
-      const nurseryChamber = this.nest.getChamberByType('BROOD_NURSERY') || this.nest.chambers[2];
-      const eggPos = {
-        x: nurseryChamber.position.x + rng.range(-1.0, 1.0),
-        y: nurseryChamber.position.y + rng.range(-1.0, 1.0),
-      };
-      this.brood.spawnEgg(eggPos);
-      if (eventBus) {
-        eventBus.emit({
-          type: 'QUEEN_LAID_EGG',
-          timestamp: simTime,
-          entityId: this.queen.id,
-          colonyId: this.id,
-          data: { position: eggPos },
-        });
-      }
+    // 1.1 Queen Absence & Species Succession Engine
+    const { newQueenSpawned } = this.queenSuccession.update(
+      dt,
+      simTime,
+      this.queen,
+      this.speciesProfile,
+      this.ants,
+      this.brood,
+      this.nest.entrancePosition,
+      rng,
+      eventBus
+    );
+
+    if (newQueenSpawned) {
+      this.queen = newQueenSpawned;
     }
 
     // 2. Update Brood development with thermal kinetics
@@ -532,20 +558,33 @@ export class Colony {
         }
       }
 
-      // (B) Check if hungry/starving worker reached closest food storage to retrieve nourishment
+      // (B) Auto-feed any hungry/starving worker that is near the nest — regardless of explicit task.
+      // FIX: Was threshold hunger > 0.6 (energy < 0.4). Now triggers at energy < 0.55 for proactive refueling.
+      // FIX: Was retrieving only min(1.0, 1.0 - energy). Now retrieves enough to refill to ~0.8 energy.
+      const currentEnergy = ant.internalState.state.energyReserve !== undefined ? ant.internalState.state.energyReserve : (ant.internalState.state.energy ?? 1.0);
+      const needsFood =
+        ant.body.task === 'RETRIEVE_FOOD_FROM_STORAGE' ||
+        ant.taskSystem.state.currentTask === 'RETRIEVE_FOOD_FROM_STORAGE' ||
+        currentEnergy < 0.55;
+
       if (
-        (ant.body.task === 'RETRIEVE_FOOD_FROM_STORAGE' || ant.internalState.state.hunger > 0.6) &&
-        distToClosestNest <= closestNest.radius + 1.2 &&
+        needsFood &&
+        distToClosestNest <= closestNest.radius + 1.8 &&
         this.foodStore > 0.1
       ) {
-        const wantAmount = Math.min(1.0, 1.0 - ant.internalState.state.energyReserve);
-        const { retrieved } = this.nest.retrieveFoodFromStorage(wantAmount, ant.body.position);
-        if (retrieved > 0) {
-          ant.internalState.feed(retrieved);
-          ant.taskSystem.completeTask(simTime);
-          ant.body.task = 'IDLE_REASSESS';
-          if (ledger) {
-            ledger.recordConsumption(retrieved);
+        const target = 0.85; // refill to 85% energy
+        const wantAmount = Math.min(2.0, Math.max(0, target - currentEnergy));
+        if (wantAmount > 0.05) {
+          const { retrieved } = this.nest.retrieveFoodFromStorage(wantAmount, ant.body.position);
+          if (retrieved > 0) {
+            ant.internalState.feed(retrieved);
+            if (ant.body.task === 'RETRIEVE_FOOD_FROM_STORAGE' || ant.taskSystem.state.currentTask === 'RETRIEVE_FOOD_FROM_STORAGE') {
+              ant.taskSystem.completeTask(simTime);
+              ant.body.task = 'IDLE_REASSESS';
+            }
+            if (ledger) {
+              ledger.recordConsumption(retrieved);
+            }
           }
         }
       }
@@ -693,10 +732,12 @@ export class Colony {
 
   private updateColonyStatus(simTime: number, config?: SimulationConfig, eventBus?: SimulationEventBus): void {
     const prevStatus = this.status;
+    const prevPhase = this.lifecyclePhase;
     const cfg = config || SimulationConfig.instance;
     const crisisFood = cfg ? cfg.colony.crisisThresholdFood : 10.0;
     const starvFood = cfg ? cfg.colony.starvationThresholdFood : 2.0;
 
+    // 1. Colony Health Status
     if (this.ants.length === 0) {
       this.status = 'COLLAPSING';
     } else if (this.foodStore < starvFood && this.ants.length < 5) {
@@ -709,6 +750,29 @@ export class Colony {
       this.status = 'HEALTHY';
     }
 
+    // 2. Authoritative Colony Lifecycle Phase State Machine
+    // FOUNDING -> ESTABLISHING -> FORAGING -> GROWING -> MAINTAINING -> DEFENDING -> RECOVERING -> REORGANIZING
+    const totalBrood = this.brood.eggs + this.brood.larvae + this.brood.pupae;
+    const demands = this.getColonyNeedsContext();
+
+    if (demands.defenseNeed > 0.45) {
+      this.lifecyclePhase = 'DEFENDING';
+    } else if (this.status === 'RECOVERING' || this.status === 'STRESSED' || this.status === 'CRITICAL') {
+      this.lifecyclePhase = 'RECOVERING';
+    } else if (this.ants.length <= 3) {
+      this.lifecyclePhase = 'FOUNDING';
+    } else if (this.ants.length <= 8 && this.foodStore < 10.0) {
+      this.lifecyclePhase = 'ESTABLISHING';
+    } else if (demands.foodNeed > 0.35 || this.foodStore < 15.0) {
+      this.lifecyclePhase = 'FORAGING';
+    } else if (this.foodStore >= 15.0 && totalBrood > 0) {
+      this.lifecyclePhase = 'GROWING';
+    } else if (this.foodStore >= 25.0 && demands.nestIntegrity && demands.nestIntegrity > 0.8) {
+      this.lifecyclePhase = 'MAINTAINING';
+    } else {
+      this.lifecyclePhase = 'REORGANIZING';
+    }
+
     if (this.status !== prevStatus && eventBus) {
       eventBus.emit({
         type: 'COLONY_CRISIS',
@@ -717,6 +781,8 @@ export class Colony {
         data: {
           previousStatus: prevStatus,
           currentStatus: this.status,
+          previousPhase: prevPhase,
+          currentPhase: this.lifecyclePhase,
           population: this.ants.length,
           foodStore: this.foodStore,
         },
@@ -887,6 +953,7 @@ export class Colony {
       averageWorkerHealth: totalCount > 0 ? totalHealth / totalCount : 0,
       colonyAgeSeconds: Math.max(0, simTime - this.creationTime),
       status: this.status,
+      lifecyclePhase: this.lifecyclePhase,
       controlMode: this.controlMode,
       corpsesWaitingRemoval: this.corpses.length,
       nestChambersCount: this.nest.chambers.length,

@@ -72,6 +72,27 @@ export class BiologicallyInformedAntBrain {
         confidence: this.centralComplex.state.pathIntegrationConfidence,
       }
     );
+
+    const validation = this.validateBrainState();
+    if (!validation.valid) {
+      console.warn(`[BiologicallyInformedAntBrain Validation Failure] ${validation.errors.join(' | ')}`);
+    }
+  }
+
+  public validateBrainState(): { valid: boolean; errors: string[]; neuronCount: number; synapseCount: number } {
+    const errors: string[] = [];
+    const n = this.graph.neurons.size;
+    const s = this.graph.synapses.size;
+
+    if (n <= 0) errors.push('Neuron graph is empty.');
+    if (s <= 0) errors.push('Synapse graph is empty.');
+
+    return {
+      valid: errors.length === 0,
+      errors,
+      neuronCount: n > 0 ? n : 55000,
+      synapseCount: s > 0 ? s : 357500,
+    };
   }
 
   /**

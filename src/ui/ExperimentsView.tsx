@@ -23,6 +23,8 @@ import {
   Sparkles,
   Bot,
   TrendingUp,
+  Share2,
+  ExternalLink,
 } from 'lucide-react';
 
 interface ExperimentsViewProps {
@@ -63,6 +65,8 @@ export const ExperimentsView: React.FC<ExperimentsViewProps> = ({ world, onSelec
     onSelectPreset(preset);
   };
 
+  const [ablationApplied, setAblationApplied] = useState(false);
+
   const handleApplyAblation = () => {
     if (ablatePheromones) {
       world.simConfig.pheromones.depositionAmount = 0.0;
@@ -73,7 +77,8 @@ export const ExperimentsView: React.FC<ExperimentsViewProps> = ({ world, onSelec
     if (ablatePredatorFear) {
       world.simConfig.ant.fearThreshold = 999.0;
     }
-    alert('Ablation study configuration applied to live simulation kernel.');
+    setAblationApplied(true);
+    setTimeout(() => setAblationApplied(false), 3500);
   };
 
   const handleRunSweep = () => {
@@ -116,7 +121,7 @@ export const ExperimentsView: React.FC<ExperimentsViewProps> = ({ world, onSelec
 
   const handleExportExperiment = () => {
     const config = {
-      version: '1.2.0-antbrain',
+      version: '1.2.0-antwire',
       timestamp: new Date().toISOString(),
       section: activeSection,
       presetId: selectedPresetId,
@@ -172,6 +177,37 @@ export const ExperimentsView: React.FC<ExperimentsViewProps> = ({ world, onSelec
             </button>
           ))}
         </div>
+      </div>
+
+      {/* Live Showcase Banner Card */}
+      <div className="bg-gradient-to-r from-cyan-950/90 via-slate-900 to-indigo-950/90 p-4 rounded-xl border border-cyan-500/40 shadow-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 font-sans">
+        <div className="flex items-start gap-3">
+          <div className="p-2.5 rounded-lg bg-cyan-500/20 border border-cyan-400/40 text-cyan-300">
+            <Bot className="w-6 h-6 animate-pulse" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 tracking-wider">
+                LIVE DEPLOYED SHOWCASE
+              </span>
+              <h3 className="text-xs font-bold text-slate-100 tracking-wide">
+                AntWire Keyboard RL — Trained Brain Demonstration
+              </h3>
+            </div>
+            <p className="text-[11px] text-slate-300 mt-1 leading-snug">
+              Demonstrates the trained AntWire computational ant brain controlling ants to perform the specified keyboard task accurately.
+            </p>
+          </div>
+        </div>
+        <a
+          href="https://ant-brain-keyboard.vercel.app/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="px-3.5 py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white text-xs font-bold transition-all shadow-lg hover:shadow-cyan-500/20 flex items-center gap-1.5 whitespace-nowrap self-end sm:self-center cursor-pointer"
+        >
+          <span>Launch Live Demo</span>
+          <ExternalLink className="w-3.5 h-3.5" />
+        </a>
       </div>
 
       {/* 1. Presets Section */}
@@ -255,9 +291,20 @@ export const ExperimentsView: React.FC<ExperimentsViewProps> = ({ world, onSelec
 
           <button
             onClick={handleApplyAblation}
-            className="py-2 px-3 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold transition-all"
+            className={`py-2 px-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2 ${
+              ablationApplied
+                ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-900/30'
+                : 'bg-amber-600 hover:bg-amber-500 text-white'
+            }`}
           >
-            Apply Ablation Configuration to Live Simulation
+            {ablationApplied ? (
+              <>
+                <CheckCircle2 className="w-4 h-4 text-emerald-200" />
+                <span>Ablation Configuration Active in Simulation Kernel</span>
+              </>
+            ) : (
+              <span>Apply Ablation Configuration to Live Simulation</span>
+            )}
           </button>
         </div>
       )}

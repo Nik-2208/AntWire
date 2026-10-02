@@ -588,6 +588,15 @@ export class SceneManager {
         }
       }
 
+      // Check click on predators
+      for (const [predId, mesh] of this.predatorMeshes.entries()) {
+        const predHits = this.raycaster.intersectObject(mesh, true);
+        if (predHits.length > 0) {
+          if (this.onSelectEntity) this.onSelectEntity('PREDATOR', predId);
+          return;
+        }
+      }
+
       // Check click on ground terrain
       if (this.terrainMesh) {
         const terrainHits = this.raycaster.intersectObject(this.terrainMesh);

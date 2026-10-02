@@ -80,16 +80,21 @@ export class RuleBasedController implements AntController {
     }
 
     // 4. AT FOOD SOURCE -> HARVEST FOOD
-    if (internalState.carryingFoodAmount <= 0 && sensors.foodProximity >= 0.9 && sensors.detectedFoodId) {
+    // FIX: Lower proximity threshold from 0.9 to 0.5 so collection triggers reliably.
+    // The sensor 'foodProximity' scales from 0-1 based on distance / sensoryRange.
+    // At the food collection radius (~2.0 units) within sensory range (2.2), proximity ≈ 0.1.
+    // The actual pickup is handled by executeAction with a 2.0-unit radius check.
+    if (internalState.carryingFoodAmount <= 0 && sensors.detectedFoodId &&
+        (sensors.foodProximity >= 0.4 || sensors.foodOdorConcentration >= 0.6)) {
       action = ActionFactory.collectFood(sensors.detectedFoodId);
       confidence = 0.95;
-      humanReason = 'Found food resource; grasping food packet in mandibles.';
-      techReason = `foodProx=${sensors.foodProximity.toFixed(2)}, foodId=${sensors.detectedFoodId} -> COLLECT_FOOD`;
+      humanReason = 'Food source detected; approaching and grasping food packet with mandibles.';
+      techReason = `foodProx=${sensors.foodProximity.toFixed(2)}, foodOdor=${sensors.foodOdorConcentration.toFixed(2)}, foodId=${sensors.detectedFoodId} -> COLLECT_FOOD`;
       return this.wrapOutput(antId, simTime, tick, sensors, internalState, drives, action, dominantDrive, dominantVal, confidence, humanReason, techReason);
     }
 
     // 5. HOMING NAVIGATION (Returning to nest with food or when starving)
-    if (drives.homing > 0.6 || internalState.carryingFoodAmount > 0) {
+    if (drives.homing > 0.45 || internalState.carryingFoodAmount > 0) {
       let steerAngle = 0;
 
       // Check home pheromone trail gradient first
@@ -102,16 +107,19 @@ export class RuleBasedController implements AntController {
       }
 
       // Add slight noise to prevent getting stuck
-      steerAngle += rng.gaussian(0, 0.08);
+      steerAngle += rng.gaussian(0, 0.07);
 
       action = ActionFactory.move(1.0, steerAngle);
 
-      // If carrying food, homing return navigation (recruitment deposition is evaluated by PheromoneDecisionEngine)
       if (internalState.carryingFoodAmount > 0) {
-        humanReason = 'Returning to nest with food cargo; recruitment trail deposition evaluated contextually by PheromoneDecisionEngine.';
-        techReason = `homingDrive=${drives.homing.toFixed(2)}, nestAngle=${sensors.nestOdorDirection.toFixed(2)} rad -> steer ${steerAngle.toFixed(2)} rad`;
+        // Deposit FOOD_TRAIL (recruitment) when returning with food
+        // The pheromone decision engine handles the actual deposition context-appropriately.
+        action.depositPheromoneType = PheromoneChannel.FOOD_TRAIL;
+        action.depositPheromoneStrength = 0.85;
+        humanReason = 'Returning to nest with food cargo; laying recruitment trail for nestmates.';
+        techReason = `carryingFood=${internalState.carryingFoodAmount.toFixed(2)}, nestAngle=${sensors.nestOdorDirection.toFixed(2)} rad -> steer ${steerAngle.toFixed(2)} rad + FOOD_TRAIL`;
       } else {
-        humanReason = 'Critically low on energy; returning to nest to feed.';
+        humanReason = 'Low energy; returning to nest to feed from colony storage.';
         techReason = `energy=${(internalState.energy * 100).toFixed(0)}%, homingDrive=${drives.homing.toFixed(2)} -> steer ${steerAngle.toFixed(2)} rad`;
       }
       confidence = 0.85;
@@ -119,43 +127,58 @@ export class RuleBasedController implements AntController {
     }
 
     // 6. FOOD SEEKING NAVIGATION (Following chemical trails or direct food odor)
-    if (drives.foodSeeking > 0.4) {
+    if (drives.foodSeeking > 0.3 || body.task === 'FORAGING' || body.task === 'SEEK_FOOD') {
       let steerAngle = 0;
       let usedSignal = 'wander';
 
       // (A) Direct food odor is strong
-      if (sensors.foodOdorConcentration > 0.25) {
-        steerAngle = sensors.foodOdorDirection * 0.75 + rng.gaussian(0, 0.05);
+      if (sensors.foodOdorConcentration > 0.2) {
+        steerAngle = sensors.foodOdorDirection * 0.8 + rng.gaussian(0, 0.04);
         usedSignal = 'direct food volatile odor';
       }
       // (B) Pheromone trail tropotaxis (differential left/right antennae stimulation)
-      else if (sensors.foodLeft > 0.05 || sensors.foodRight > 0.05 || sensors.foodCenter > 0.05) {
-        const diff = sensors.foodRight - sensors.foodLeft;
-        if (Math.abs(diff) > 0.02) {
-          steerAngle = diff > 0 ? 0.45 : -0.45;
+      else if (sensors.foodLeft > 0.01 || sensors.foodRight > 0.01 || sensors.foodCenter > 0.01) {
+        // 88% exploitation of established chemical trail, 12% exploratory scouting to discover new resources
+        if (rng.chance(0.88)) {
+          const sum = sensors.foodRight + sensors.foodLeft + 0.01;
+          const contrast = (sensors.foodRight - sensors.foodLeft) / sum;
+          if (Math.abs(contrast) > 0.06) {
+            steerAngle = Math.max(-0.6, Math.min(0.6, contrast * 0.75)) + rng.gaussian(0, 0.03);
+          } else if (sensors.foodCenter > 0.02) {
+            steerAngle = rng.gaussian(0, 0.03); // drive forward along central chemical crest
+          } else {
+            steerAngle = rng.gaussian(0, 0.05);
+          }
+          usedSignal = `trail pheromone (L=${sensors.foodLeft.toFixed(2)}, R=${sensors.foodRight.toFixed(2)}, C=${sensors.foodCenter.toFixed(2)})`;
         } else {
-          steerAngle = rng.gaussian(0, 0.06); // Follow straight along center ridge
+          // Exploratory departure branching off the trail
+          steerAngle = (rng.chance(0.5) ? 0.65 : -0.65) + rng.gaussian(0, 0.1);
+          usedSignal = 'exploratory trail-branching scout';
         }
-        usedSignal = `trail pheromone (L=${sensors.foodLeft.toFixed(2)}, R=${sensors.foodRight.toFixed(2)})`;
       }
       // (C) Memory of recent food patch
-      else if (memory.lastKnownFoodPosition && memory.foodConfidence > 0.3) {
+      else if (memory.lastKnownFoodPosition && memory.foodConfidence > 0.25) {
         const mdx = memory.lastKnownFoodPosition.x - body.position.x;
         const mdy = memory.lastKnownFoodPosition.y - body.position.y;
         const targetHeading = Math.atan2(mdy, mdx);
         let angleDiff = targetHeading - body.heading;
         while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
         while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-        steerAngle = angleDiff * 0.5 + rng.gaussian(0, 0.1);
+        steerAngle = angleDiff * 0.55 + rng.gaussian(0, 0.08);
         usedSignal = 'spatial memory trace';
+      } else {
+        // Pure exploration wandering
+        steerAngle = rng.gaussian(0, 0.22);
+        if (rng.chance(0.04)) steerAngle = rng.range(-1.2, 1.2);
+        usedSignal = 'exploratory random walk';
       }
 
       action = ActionFactory.move(1.0, steerAngle);
-      // While scouting outbound, deposit orientation home trail
+      // While scouting outbound, deposit orientation home trail so ant can find its way back
       action.depositPheromoneType = PheromoneChannel.HOME_TRAIL;
-      action.depositPheromoneStrength = 0.4;
+      action.depositPheromoneStrength = 0.35;
 
-      confidence = 0.78;
+      confidence = 0.72;
       humanReason = `Searching for food; following ${usedSignal}.`;
       techReason = `foodDrive=${drives.foodSeeking.toFixed(2)}, signal=${usedSignal} -> steer ${steerAngle.toFixed(2)} rad`;
       return this.wrapOutput(antId, simTime, tick, sensors, internalState, drives, action, dominantDrive, dominantVal, confidence, humanReason, techReason);

@@ -1,0 +1,119 @@
+/**
+ * ANTWRE — Centralized Brand Styles & Icon Conventions
+ * Created & Developed by Nikhilesh H. Chavda
+ */
+
+:root {
+  --antwire-bg: #06080d;
+  --antwire-panel: #0c1017;
+  --antwire-card: #111622;
+  --antwire-card-hover: #161d2c;
+  --antwire-cyan: #06b6d4;
+  --antwire-emerald: #10b981;
+  --antwire-gold: #f59e0b;
+  --antwire-border: #1e293b;
+  --antwire-border-subtle: #131a26;
+  --antwire-text-primary: #f8fafc;
+  --antwire-text-secondary: #94a3b8;
+  --antwire-text-muted: #64748b;
+}
+
+/* Global Icon Styling & Color Inheritance Standard */
+svg.lucide,
+.antwire-icon {
+  stroke: currentColor;
+  stroke-width: 1.85;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  display: inline-block;
+  vertical-align: middle;
+  flex-shrink: 0;
+  transition: color 0.15s ease, stroke 0.15s ease, opacity 0.15s ease;
+}
+
+/* Eliminate mixed monotone/partially filled SVG bugs */
+svg.lucide:not([fill="currentColor"]):not([fill="none"]) {
+  fill: none !important;
+}
+
+/* Brand Button Styles */
+.btn-brand-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  background-color: #059669;
+  color: #ffffff;
+  font-weight: 600;
+  font-size: 0.75rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+}
+
+.btn-brand-primary:hover {
+  background-color: #10b981;
+  border-color: #34d399;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
+}
+
+.btn-brand-primary:active {
+  transform: translateY(0);
+}
+
+.btn-brand-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  background-color: #111622;
+  color: #e2e8f0;
+  font-weight: 500;
+  font-size: 0.75rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: 0.5rem;
+  border: 1px solid #1e293b;
+  transition: all 0.15s ease;
+}
+
+.btn-brand-secondary:hover {
+  background-color: #1e293b;
+  color: #ffffff;
+  border-color: #334155;
+}
+
+/* AntWire Brand Card */
+.antwire-card {
+  background-color: #111622;
+  border: 1px solid #1e293b;
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.antwire-card:hover {
+  border-color: rgba(6, 182, 212, 0.4);
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.5);
+}
+
+/* Custom Sleek Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #06080d;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #334155;
+}

@@ -10,6 +10,7 @@
 import React, { useState } from 'react';
 import { Ant } from '../ants/ant';
 import { SimulationWorld } from '../simulation/world';
+import { AntWireLogo } from './AntWireLogo';
 import { Users, Shield, Package, Hammer, Compass, Award, CheckCircle2, Play, Plus, Zap } from 'lucide-react';
 import { AntTask } from '../simulation/types';
 
@@ -129,8 +130,8 @@ export const MultiAgentView: React.FC<MultiAgentViewProps> = ({ world, selectedA
     <div className="flex flex-col gap-3 p-4 bg-slate-900/90 border border-slate-800 rounded-2xl text-slate-200 text-xs shadow-xl backdrop-blur-md overflow-y-auto max-h-[85vh]">
       {/* Title Header */}
       <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
-        <div className="flex items-center gap-2">
-          <Users className="w-5 h-5 text-indigo-400" />
+        <div className="flex items-center gap-3">
+          <AntWireLogo size="sm" showSubtitle={false} showBadge={false} glowEffect={false} />
           <div>
             <h2 className="text-sm font-bold font-heading text-slate-100">MULTI-AGENT COORDINATION & GROUP TASKS</h2>
             <p className="text-[10px] text-slate-400">

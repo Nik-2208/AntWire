@@ -1,5 +1,5 @@
 /**
- * ANT BRAIN — Training Lab & "Teach an Ant" Sandbox
+ * ANTWIRE — Training Lab & "Teach an Ant" Sandbox
  * Allows researchers to create behavioral tasks (Foraging, Obstacle Maze, Trail Following, Predator Evasion),
  * shape decomposed reward functions, train neural/RL policies, save persistent checkpoints,
  * load checkpoints to continue training without reset, and deploy weights to live simulation ants.

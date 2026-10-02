@@ -14,9 +14,31 @@ import { SimulationEventBus } from '../simulation/events';
 export class PredatorManager {
   public predators: Predator[] = [];
   private nextId = 1;
+  public defaultSpeed?: number;
+  public defaultDamage?: number;
 
   public get count(): number {
     return this.predators.length;
+  }
+
+  public getPredatorById(id: string): Predator | undefined {
+    return this.predators.find((p) => p.state.id === id);
+  }
+
+  public setAllSpeeds(speed: number): void {
+    const s = Math.max(0.2, Math.min(25.0, Number.isFinite(speed) ? speed : 2.5));
+    this.defaultSpeed = s;
+    for (const p of this.predators) {
+      p.speed = s;
+    }
+  }
+
+  public setAllDamages(damage: number): void {
+    const d = Math.max(0.01, Math.min(10.0, Number.isFinite(damage) ? damage : 0.5));
+    this.defaultDamage = d;
+    for (const p of this.predators) {
+      p.damage = d;
+    }
   }
 
   public spawnPredator(
@@ -28,6 +50,12 @@ export class PredatorManager {
     const id = `predator-${this.nextId++}`;
     const h = heading !== undefined ? heading : Math.random() * Math.PI * 2;
     const pred = new Predator(id, pos, h, type);
+    if (this.defaultSpeed !== undefined) {
+      pred.speed = this.defaultSpeed;
+    }
+    if (this.defaultDamage !== undefined) {
+      pred.damage = this.defaultDamage;
+    }
     this.predators.push(pred);
 
     if (eventBus) {

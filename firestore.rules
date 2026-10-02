@@ -1,0 +1,91 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(uid) {
+      return isAuthenticated() && request.auth.uid == uid;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && request.auth.token.admin == true;
+    }
+
+    // Users Collection
+    match /users/{uid} {
+      allow read: if isAuthenticated();
+      allow write: if isOwner(uid);
+    }
+
+    // Official Model Releases (Public read, admin-only write)
+    match /modelReleases/{modelId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Verified Download Events (Public append-only, immutable)
+    match /downloadEvents/{eventId} {
+      allow read: if true;
+      allow create: if request.resource.data.downloadEventId == eventId
+                    && request.resource.data.timestamp <= request.time.toMillis()
+                    && request.resource.data.uid.size() <= 128;
+      allow update, delete: if false;
+    }
+
+    // Feedback Tickets
+    match /feedback/{feedbackId} {
+      allow read: if true;
+      allow create: if request.resource.data.title.size() >= 3
+                    && request.resource.data.title.size() <= 150
+                    && request.resource.data.body.size() >= 10
+                    && request.resource.data.body.size() <= 2000;
+      allow update: if isOwner(resource.data.uid) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Developer Discussion Comments
+    match /comments/{commentId} {
+      allow read: if true;
+      allow create: if request.resource.data.body.size() >= 3
+                    && request.resource.data.body.size() <= 1500;
+      allow update: if isOwner(resource.data.uid) || isAdmin();
+      allow delete: if isOwner(resource.data.uid) || isAdmin();
+    }
+
+    // Community Feature Requests
+    match /featureRequests/{requestId} {
+      allow read: if true;
+      allow create: if request.resource.data.title.size() >= 3
+                    && request.resource.data.title.size() <= 150
+                    && request.resource.data.description.size() >= 10
+                    && request.resource.data.description.size() <= 2000;
+      allow update: if isAuthenticated() || isOwner(resource.data.uid) || isAdmin();
+      allow delete: if isOwner(resource.data.uid) || isAdmin();
+    }
+
+    // Bug Reports
+    match /bugReports/{reportId} {
+      allow read: if true;
+      allow create: if request.resource.data.title.size() >= 3
+                    && request.resource.data.title.size() <= 150
+                    && request.resource.data.description.size() >= 10
+                    && request.resource.data.description.size() <= 2000;
+      allow update: if isOwner(resource.data.uid) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Public Multi-Agent Experiments Registry
+    match /publicExperiments/{experimentId} {
+      allow read: if true;
+      allow create: if request.resource.data.title.size() >= 5
+                    && request.resource.data.title.size() <= 150
+                    && request.resource.data.description.size() <= 2000;
+      allow update: if isOwner(resource.data.authorId) || isAdmin();
+      allow delete: if isOwner(resource.data.authorId) || isAdmin();
+    }
+  }
+}

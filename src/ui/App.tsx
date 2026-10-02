@@ -9,6 +9,7 @@ import { Canvas2DRenderer } from '../visualization/canvas2d_renderer';
 import { Header, MainNavTab } from './Header';
 import { AntInspector } from './AntInspector';
 import { QueenInspector } from './QueenInspector';
+import { PredatorControlPanel } from './PredatorControlPanel';
 import { DecisionTerminal } from './DecisionTerminal';
 import { ParameterPanel } from './ParameterPanel';
 import { EcologyPanel } from './EcologyPanel';
@@ -17,9 +18,9 @@ import { EmergenceDashboard } from './EmergenceDashboard';
 import { SimpleMode } from './SimpleMode';
 import { ResearchMode } from './ResearchMode';
 import { NeurobiologyLab } from './NeurobiologyLab';
-import { AntBrainAtlas } from './AntBrainAtlas';
 import { DigitalNeuronLab } from './DigitalNeuronLab';
 import { ErrorBoundary } from './ErrorBoundary';
+import { AntWireLogo } from './AntWireLogo';
 import { AddEntityModal } from './AddEntityModal';
 import { EntityManagementModal } from './EntityManagementModal';
 import { ColonyView } from './ColonyView';
@@ -30,6 +31,7 @@ import { MultiAgentView } from './MultiAgentView';
 import { TrainingLabView } from './TrainingLabView';
 import { EvolutionLabView } from './EvolutionLabView';
 import { ExperimentsView } from './ExperimentsView';
+import { CommunityView } from './CommunityView';
 import { DataHubView } from './DataHubView';
 import { SettingsView } from './SettingsView';
 import { AboutView } from './AboutView';
@@ -82,7 +84,8 @@ export const App: React.FC = () => {
 
   // Inspector & Panels
   const [selectedAntId, setSelectedAntId] = useState<string | null>(null);
-  const [inspectorView, setInspectorView] = useState<'ANT' | 'NEUROBIOLOGY' | 'ATLAS' | 'NEURON_LAB' | 'QUEEN' | 'ECOLOGY' | 'PARAMETERS'>('ANT');
+  const [selectedPredatorId, setSelectedPredatorId] = useState<string | null>(null);
+  const [inspectorView, setInspectorView] = useState<'ANT' | 'NEUROBIOLOGY' | 'NEURON_LAB' | 'QUEEN' | 'PREDATOR' | 'ECOLOGY' | 'PARAMETERS' | 'RESEARCH'>('ANT');
   const [activeTool, setActiveTool] = useState<WorldToolType>('INSPECT');
   const activeToolRef = useRef(activeTool);
   activeToolRef.current = activeTool;
@@ -111,11 +114,16 @@ export const App: React.FC = () => {
               setInspectorView('ANT');
             } else if (type === 'QUEEN') {
               setInspectorView('QUEEN');
+            } else if (type === 'PREDATOR' && id) {
+              setSelectedPredatorId(id);
+              setInspectorView('PREDATOR');
             }
           } else if (currentTool === 'PLACE_FOOD' && worldPos) {
             world.placeFoodCluster(worldPos, 80, 2.5);
           } else if (currentTool === 'SPAWN_PREDATOR' && worldPos) {
-            world.spawnPredator(worldPos);
+            const pred = world.spawnPredator(worldPos);
+            setSelectedPredatorId(pred.id);
+            setInspectorView('PREDATOR');
           } else if (currentTool === 'PLACE_OBSTACLE' && worldPos) {
             world.placeObstacle(worldPos, 2.4, 2.5);
           }
@@ -139,11 +147,16 @@ export const App: React.FC = () => {
             setInspectorView('ANT');
           } else if (type === 'QUEEN') {
             setInspectorView('QUEEN');
+          } else if (type === 'PREDATOR' && id) {
+            setSelectedPredatorId(id);
+            setInspectorView('PREDATOR');
           }
         } else if (currentTool === 'PLACE_FOOD' && worldPos) {
           world.placeFoodCluster(worldPos, 80, 2.5);
         } else if (currentTool === 'SPAWN_PREDATOR' && worldPos) {
-          world.spawnPredator(worldPos);
+          const pred = world.spawnPredator(worldPos);
+          setSelectedPredatorId(pred.id);
+          setInspectorView('PREDATOR');
         } else if (currentTool === 'PLACE_OBSTACLE' && worldPos) {
           world.placeObstacle(worldPos, 2.4, 2.5);
         }
@@ -184,7 +197,18 @@ export const App: React.FC = () => {
     animationFrameId = requestAnimationFrame(loop);
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.code === 'Space') {
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.isContentEditable ||
+          target.closest('input, textarea, [contenteditable="true"]'))
+      ) {
+        return;
+      }
+
+      if (e.code === 'Space' || e.key === ' ') {
         e.preventDefault();
         const paused = world.clock.togglePause();
         setIsPaused(paused);
@@ -245,6 +269,7 @@ export const App: React.FC = () => {
     averageWorkerHealth: 1,
     colonyAgeSeconds: 0,
     status: 'HEALTHY' as const,
+    lifecyclePhase: 'FOUNDING' as const,
     controlMode: 'AUTONOMOUS' as const,
     corpsesWaitingRemoval: 0,
     nestChambersCount: 4,
@@ -447,12 +472,12 @@ export const App: React.FC = () => {
                 </button>
 
                 {rightPanelOpen && (
-                  <div className="flex flex-col gap-2.5 w-[calc(100vw-36px)] sm:w-80 md:w-88 max-w-sm max-h-[calc(100vh-140px)] overflow-y-auto no-scrollbar pr-0.5">
+                  <div className="flex flex-col gap-2.5 w-[calc(100vw-36px)] sm:w-80 md:w-88 max-w-sm max-h-[calc(100vh-100px)] overflow-y-auto pb-32 pr-1 select-none">
                     {/* Tab Switcher */}
-                    <div className="glass-panel p-1 rounded-xl flex items-center gap-1 text-[10px] flex-wrap">
+                    <div className="glass-panel p-1 rounded-xl flex items-center gap-1 text-[10px] flex-wrap sticky top-0 z-10 shadow-md">
                       <button
                         onClick={() => setInspectorView('ANT')}
-                        className={`flex-1 min-w-[50px] py-1 rounded-lg font-semibold transition-all cursor-pointer ${
+                        className={`flex-1 min-w-[45px] py-1 rounded-lg font-semibold transition-all cursor-pointer ${
                           inspectorView === 'ANT'
                             ? 'bg-cyan-600/40 text-cyan-300 border border-cyan-500/50'
                             : 'text-slate-400 hover:text-slate-200'
@@ -462,7 +487,7 @@ export const App: React.FC = () => {
                       </button>
                       <button
                         onClick={() => setInspectorView('NEUROBIOLOGY')}
-                        className={`flex-1 min-w-[50px] py-1 rounded-lg font-semibold transition-all cursor-pointer ${
+                        className={`flex-1 min-w-[45px] py-1 rounded-lg font-semibold transition-all cursor-pointer ${
                           inspectorView === 'NEUROBIOLOGY'
                             ? 'bg-emerald-600/40 text-emerald-300 border border-emerald-500/50'
                             : 'text-slate-400 hover:text-slate-200'
@@ -471,28 +496,18 @@ export const App: React.FC = () => {
                         Neuropils
                       </button>
                       <button
-                        onClick={() => setInspectorView('ATLAS')}
-                        className={`flex-1 min-w-[50px] py-1 rounded-lg font-semibold transition-all cursor-pointer ${
-                          inspectorView === 'ATLAS'
-                            ? 'bg-sky-600/40 text-sky-300 border border-sky-500/50'
-                            : 'text-slate-400 hover:text-slate-200'
-                        }`}
-                      >
-                        3D Atlas
-                      </button>
-                      <button
                         onClick={() => setInspectorView('NEURON_LAB')}
-                        className={`flex-1 min-w-[50px] py-1 rounded-lg font-semibold transition-all cursor-pointer ${
+                        className={`flex-1 min-w-[45px] py-1 rounded-lg font-semibold transition-all cursor-pointer ${
                           inspectorView === 'NEURON_LAB'
                             ? 'bg-rose-600/40 text-rose-300 border border-rose-500/50'
                             : 'text-slate-400 hover:text-slate-200'
                         }`}
                       >
-                        Neuron Lab
+                        Neuron
                       </button>
                       <button
                         onClick={() => setInspectorView('QUEEN')}
-                        className={`flex-1 min-w-[45px] py-1 rounded-lg font-semibold transition-all cursor-pointer ${
+                        className={`flex-1 min-w-[40px] py-1 rounded-lg font-semibold transition-all cursor-pointer ${
                           inspectorView === 'QUEEN'
                             ? 'bg-amber-600/40 text-amber-300 border border-amber-500/50'
                             : 'text-slate-400 hover:text-slate-200'
@@ -501,8 +516,18 @@ export const App: React.FC = () => {
                         Queen
                       </button>
                       <button
-                        onClick={() => setInspectorView('ECOLOGY')}
+                        onClick={() => setInspectorView('PREDATOR')}
                         className={`flex-1 min-w-[45px] py-1 rounded-lg font-semibold transition-all cursor-pointer ${
+                          inspectorView === 'PREDATOR'
+                            ? 'bg-rose-600/40 text-rose-300 border border-rose-500/50 shadow-sm shadow-rose-950/40'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        Predator
+                      </button>
+                      <button
+                        onClick={() => setInspectorView('ECOLOGY')}
+                        className={`flex-1 min-w-[40px] py-1 rounded-lg font-semibold transition-all cursor-pointer ${
                           inspectorView === 'ECOLOGY'
                             ? 'bg-emerald-600/40 text-emerald-300 border border-emerald-500/50'
                             : 'text-slate-400 hover:text-slate-200'
@@ -512,13 +537,23 @@ export const App: React.FC = () => {
                       </button>
                       <button
                         onClick={() => setInspectorView('PARAMETERS')}
-                        className={`flex-1 min-w-[45px] py-1 rounded-lg font-semibold transition-all cursor-pointer ${
+                        className={`flex-1 min-w-[40px] py-1 rounded-lg font-semibold transition-all cursor-pointer ${
                           inspectorView === 'PARAMETERS'
                             ? 'bg-purple-600/40 text-purple-300 border border-purple-500/50'
                             : 'text-slate-400 hover:text-slate-200'
                         }`}
                       >
                         Params
+                      </button>
+                      <button
+                        onClick={() => setInspectorView('RESEARCH')}
+                        className={`flex-1 min-w-[45px] py-1 rounded-lg font-semibold transition-all cursor-pointer ${
+                          inspectorView === 'RESEARCH'
+                            ? 'bg-cyan-600/40 text-cyan-300 border border-cyan-500/50'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        Telemetry
                       </button>
                     </div>
 
@@ -534,7 +569,6 @@ export const App: React.FC = () => {
                       />
                     )}
                     {inspectorView === 'NEUROBIOLOGY' && <NeurobiologyLab ant={selectedAnt} />}
-                    {inspectorView === 'ATLAS' && <AntBrainAtlas selectedAnt={selectedAnt} />}
                     {inspectorView === 'NEURON_LAB' && <DigitalNeuronLab />}
                     {inspectorView === 'QUEEN' && colony && (
                       <QueenInspector
@@ -543,24 +577,21 @@ export const App: React.FC = () => {
                         colonyFoodStore={colony.foodStore}
                       />
                     )}
+                    {inspectorView === 'PREDATOR' && (
+                      <PredatorControlPanel
+                        world={world}
+                        selectedPredatorId={selectedPredatorId}
+                        onSelectPredator={setSelectedPredatorId}
+                        onChange={() => setFrameTick((p) => p + 1)}
+                      />
+                    )}
                     {inspectorView === 'ECOLOGY' && (
                       <EcologyPanel world={world} onRefresh={() => setFrameTick((p) => p + 1)} />
                     )}
                     {inspectorView === 'PARAMETERS' && (
                       <ParameterPanel world={world} onParamChange={() => setFrameTick((p) => p + 1)} />
                     )}
-
-                    {/* Simple or Research Mode Panel */}
-                    {mode === 'SIMPLE' ? (
-                      <SimpleMode
-                        world={world}
-                        selectedAnt={selectedAnt}
-                        onOpenWhyModal={() => {
-                          const whyBtn = document.querySelector('button:has(svg)') as HTMLElement;
-                          if (whyBtn) whyBtn.click();
-                        }}
-                      />
-                    ) : (
+                    {inspectorView === 'RESEARCH' && (
                       <ResearchMode world={world} selectedAnt={selectedAnt} />
                     )}
                   </div>
@@ -719,6 +750,13 @@ export const App: React.FC = () => {
             </div>
           )}
 
+          {/* TAB 7B: COMMUNITY PLATFORM & MODEL HUB */}
+          {activeTab === 'COMMUNITY' && (
+            <div className="w-full h-full overflow-hidden flex flex-col">
+              <CommunityView />
+            </div>
+          )}
+
           {/* TAB 8: DATA HUB */}
           {activeTab === 'DATA' && (
             <div className="w-full h-full overflow-y-auto p-2 sm:p-4 md:p-6 no-scrollbar">
@@ -766,7 +804,7 @@ export const App: React.FC = () => {
         {/* PERSISTENT SYSTEM FOOTER & AUTHOR ATTRIBUTION */}
         <footer className="h-7 bg-slate-950/95 border-t border-slate-800/80 px-3 flex items-center justify-between text-[10px] text-slate-400 select-none z-20 shrink-0 font-mono">
           <div className="flex items-center gap-2">
-            <span className="font-bold text-cyan-400 tracking-wider">ANTWIRE</span>
+            <AntWireLogo size="xs" showSubtitle={false} showBadge={false} glowEffect={false} />
             <span className="text-slate-600 hidden sm:inline">|</span>
             <span className="text-slate-300 hidden sm:inline">
               Created & Developed by <strong className="text-emerald-400 font-bold">Nikhilesh H. Chavda</strong>

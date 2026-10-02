@@ -68,22 +68,34 @@ export class AntSensors {
     const sRange = body.traits.sensoryRange;
     const aAngle = body.traits.antennaeAngle;
 
-    // 1. Sample Antennae Pheromones (Food trail, Home trail, Alarm)
-    const leftRay = pheromones.sampleRay(px, py, heading, -aAngle, sRange, PheromoneChannel.FOOD_TRAIL);
-    const centerRay = pheromones.sampleRay(px, py, heading, 0, sRange * 1.1, PheromoneChannel.FOOD_TRAIL);
-    const rightRay = pheromones.sampleRay(px, py, heading, aAngle, sRange, PheromoneChannel.FOOD_TRAIL);
+    // 1. Sample Antennae Pheromones (Food, Home, Danger/Alarm, Recruitment, Explore, Task)
+    const leftRay = pheromones.sampleRay(px, py, heading, -aAngle, sRange, PheromoneChannel.FOOD);
+    const centerRay = pheromones.sampleRay(px, py, heading, 0, sRange * 1.1, PheromoneChannel.FOOD);
+    const rightRay = pheromones.sampleRay(px, py, heading, aAngle, sRange, PheromoneChannel.FOOD);
 
     this.leftAntennaPos = leftRay.point;
     this.centerAntennaPos = centerRay.point;
     this.rightAntennaPos = rightRay.point;
 
-    const homeL = pheromones.sampleRay(px, py, heading, -aAngle, sRange, PheromoneChannel.HOME_TRAIL).concentration;
-    const homeC = pheromones.sampleRay(px, py, heading, 0, sRange * 1.1, PheromoneChannel.HOME_TRAIL).concentration;
-    const homeR = pheromones.sampleRay(px, py, heading, aAngle, sRange, PheromoneChannel.HOME_TRAIL).concentration;
+    const homeL = pheromones.sampleRay(px, py, heading, -aAngle, sRange, PheromoneChannel.HOME).concentration;
+    const homeC = pheromones.sampleRay(px, py, heading, 0, sRange * 1.1, PheromoneChannel.HOME).concentration;
+    const homeR = pheromones.sampleRay(px, py, heading, aAngle, sRange, PheromoneChannel.HOME).concentration;
 
-    const alarmL = pheromones.sampleRay(px, py, heading, -aAngle, sRange, PheromoneChannel.ALARM).concentration;
-    const alarmC = pheromones.sampleRay(px, py, heading, 0, sRange * 1.1, PheromoneChannel.ALARM).concentration;
-    const alarmR = pheromones.sampleRay(px, py, heading, aAngle, sRange, PheromoneChannel.ALARM).concentration;
+    const alarmL = pheromones.sampleRay(px, py, heading, -aAngle, sRange, PheromoneChannel.DANGER).concentration;
+    const alarmC = pheromones.sampleRay(px, py, heading, 0, sRange * 1.1, PheromoneChannel.DANGER).concentration;
+    const alarmR = pheromones.sampleRay(px, py, heading, aAngle, sRange, PheromoneChannel.DANGER).concentration;
+
+    const recruitL = pheromones.sampleRay(px, py, heading, -aAngle, sRange, PheromoneChannel.RECRUITMENT).concentration;
+    const recruitC = pheromones.sampleRay(px, py, heading, 0, sRange * 1.1, PheromoneChannel.RECRUITMENT).concentration;
+    const recruitR = pheromones.sampleRay(px, py, heading, aAngle, sRange, PheromoneChannel.RECRUITMENT).concentration;
+
+    const exploreL = pheromones.sampleRay(px, py, heading, -aAngle, sRange, PheromoneChannel.EXPLORE).concentration;
+    const exploreC = pheromones.sampleRay(px, py, heading, 0, sRange * 1.1, PheromoneChannel.EXPLORE).concentration;
+    const exploreR = pheromones.sampleRay(px, py, heading, aAngle, sRange, PheromoneChannel.EXPLORE).concentration;
+
+    const taskL = pheromones.sampleRay(px, py, heading, -aAngle, sRange, PheromoneChannel.TASK).concentration;
+    const taskC = pheromones.sampleRay(px, py, heading, 0, sRange * 1.1, PheromoneChannel.TASK).concentration;
+    const taskR = pheromones.sampleRay(px, py, heading, aAngle, sRange, PheromoneChannel.TASK).concentration;
 
     // 2. Direct Food Odor Gradient (Volatiles emitted by food clusters within sensory range)
     let bestFoodOdor = 0;

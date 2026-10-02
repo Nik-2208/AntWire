@@ -8,6 +8,7 @@ import React, { useState, useEffect } from 'react';
 import { ModelCheckpoint, ModelStorageService } from '../learning/model_checkpoint';
 import { ModelPackageGenerator } from '../learning/model_package_generator';
 import { AntBrainLoader } from '../learning/antbrain_loader';
+import { AntWireLogo } from './AntWireLogo';
 import { Database, Download, Upload, Trash2, Copy, Play, BarChart2, CheckCircle2, X, Package } from 'lucide-react';
 
 interface ModelLibraryModalProps {
@@ -131,13 +132,13 @@ export const ModelLibraryModal: React.FC<ModelLibraryModalProps> = ({ isOpen, on
       <div className="flex flex-col w-full max-w-4xl max-h-[85vh] bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden text-slate-200">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-950/80">
-          <div className="flex items-center gap-2">
-            <Database className="w-5 h-5 text-cyan-400" />
+          <div className="flex items-center gap-3">
+            <AntWireLogo size="sm" showSubtitle={false} showBadge={false} glowEffect={false} />
             <div>
               <h2 className="text-sm font-bold text-slate-100 font-sans tracking-wide">
-                NEURAL MODEL REGISTRY & CHECKPOINT LIBRARY
+                MODEL CHECKPOINT LIBRARY & REGISTRY
               </h2>
-              <p className="text-[10px] text-slate-400">IndexedDB Local-First Persistence & Head-to-Head Comparison</p>
+              <p className="text-[10px] text-slate-400">Local-First Storage, Checkpoint Branching & Model Comparison</p>
             </div>
           </div>
           <div className="flex items-center gap-3">

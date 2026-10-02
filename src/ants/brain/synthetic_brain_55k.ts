@@ -270,6 +270,90 @@ export class SyntheticBrain55K {
 
     // Initialize 55,000 neurons and sparse connectome
     this.initializeConnectome();
+
+    // Validate brain connectome integrity
+    const validation = this.validateBrainState();
+    if (!validation.valid) {
+      console.warn(`[SyntheticBrain55K Validation Failure] ${validation.errors.join(' | ')}`);
+    }
+  }
+
+  /**
+   * Comprehensive Brain State & Connectome Validator
+   * Validates neuron counts, synapse counts, array dimensions, endpoint indices, region assignments, and non-NaN buffers.
+   */
+  public validateBrainState(): { valid: boolean; errors: string[]; neuronCount: number; synapseCount: number } {
+    const errors: string[] = [];
+
+    if (!this.neuronCount || this.neuronCount <= 0) {
+      errors.push('Neuron count is non-positive or unallocated.');
+    }
+    if (!this.edgeCount || this.edgeCount <= 0) {
+      errors.push('Synapse (edge) count is non-positive or unallocated.');
+    }
+
+    if (!this.activations || this.activations.length !== this.neuronCount) {
+      errors.push(`Activations array length mismatch: expected ${this.neuronCount}, got ${this.activations?.length}.`);
+    }
+    if (!this.biases || this.biases.length !== this.neuronCount) {
+      errors.push(`Biases array length mismatch: expected ${this.neuronCount}, got ${this.biases?.length}.`);
+    }
+    if (!this.thresholds || this.thresholds.length !== this.neuronCount) {
+      errors.push(`Thresholds array length mismatch: expected ${this.neuronCount}, got ${this.thresholds?.length}.`);
+    }
+    if (!this.positions || this.positions.length !== this.neuronCount * 3) {
+      errors.push(`Positions array length mismatch: expected ${this.neuronCount * 3}, got ${this.positions?.length}.`);
+    }
+    if (!this.regionIds || this.regionIds.length !== this.neuronCount) {
+      errors.push(`Region IDs array length mismatch: expected ${this.neuronCount}, got ${this.regionIds?.length}.`);
+    }
+
+    if (!this.edgeSources || this.edgeSources.length !== this.edgeCount) {
+      errors.push(`Edge sources length mismatch: expected ${this.edgeCount}, got ${this.edgeSources?.length}.`);
+    }
+    if (!this.edgeTargets || this.edgeTargets.length !== this.edgeCount) {
+      errors.push(`Edge targets length mismatch: expected ${this.edgeCount}, got ${this.edgeTargets?.length}.`);
+    }
+    if (!this.edgeWeights || this.edgeWeights.length !== this.edgeCount) {
+      errors.push(`Edge weights length mismatch: expected ${this.edgeCount}, got ${this.edgeWeights?.length}.`);
+    }
+
+    // Check for NaN / Infinity
+    let nanActivations = 0;
+    for (let i = 0; i < Math.min(1000, this.neuronCount); i++) {
+      if (isNaN(this.activations[i]) || !isFinite(this.activations[i])) nanActivations++;
+    }
+    if (nanActivations > 0) {
+      errors.push(`Detected ${nanActivations} NaN or infinite neuron activations.`);
+    }
+
+    let nanWeights = 0;
+    for (let e = 0; e < Math.min(1000, this.edgeCount); e++) {
+      if (isNaN(this.edgeWeights[e]) || !isFinite(this.edgeWeights[e])) nanWeights++;
+    }
+    if (nanWeights > 0) {
+      errors.push(`Detected ${nanWeights} NaN or infinite synaptic weights.`);
+    }
+
+    // Check for broken endpoints
+    let brokenEdges = 0;
+    for (let e = 0; e < Math.min(1000, this.edgeCount); e++) {
+      const src = this.edgeSources[e];
+      const dst = this.edgeTargets[e];
+      if (src < 0 || src >= this.neuronCount || dst < 0 || dst >= this.neuronCount) {
+        brokenEdges++;
+      }
+    }
+    if (brokenEdges > 0) {
+      errors.push(`Detected ${brokenEdges} broken synaptic connections targeting out-of-bounds neuron indices.`);
+    }
+
+    return {
+      valid: errors.length === 0,
+      errors,
+      neuronCount: this.neuronCount,
+      synapseCount: this.edgeCount,
+    };
   }
 
   /**

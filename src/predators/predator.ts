@@ -69,6 +69,8 @@ export class Predator {
   public state: PredatorState;
   public profile: PredatorProfile;
   private wanderTimer: number = 0;
+  private _customSpeed?: number;
+  private _customDamage?: number;
 
   constructor(
     id: string,
@@ -100,6 +102,32 @@ export class Predator {
     return this.profile.radius;
   }
 
+  public get speed(): number {
+    return this._customSpeed !== undefined ? this._customSpeed : this.profile.patrolSpeed;
+  }
+
+  public set speed(val: number) {
+    const sanitized = Math.max(0.2, Math.min(25.0, Number.isFinite(val) ? val : 2.5));
+    this._customSpeed = sanitized;
+    this.profile.patrolSpeed = sanitized;
+    this.profile.chaseSpeed = sanitized * 1.8;
+    if (this.state.state === 'SEARCH' || this.state.state === 'WANDER') {
+      this.state.speed = this.profile.patrolSpeed;
+    } else if (this.state.state === 'APPROACH' || this.state.state === 'DETECT') {
+      this.state.speed = this.profile.chaseSpeed;
+    }
+  }
+
+  public get damage(): number {
+    return this._customDamage !== undefined ? this._customDamage : this.profile.attackDamage;
+  }
+
+  public set damage(val: number) {
+    const sanitized = Math.max(0.01, Math.min(10.0, Number.isFinite(val) ? val : 0.5));
+    this._customDamage = sanitized;
+    this.profile.attackDamage = sanitized;
+  }
+
   public takeDamage(amount: number): void {
     if (amount > 0) {
       this.state.health = Math.max(0, this.state.health - amount);
@@ -119,10 +147,13 @@ export class Predator {
     const cfg = config || SimulationConfig.instance;
     if (cfg) {
       this.profile.aggression = cfg.predator.aggression;
-      this.profile.patrolSpeed = cfg.predator.patrolSpeed;
-      this.profile.chaseSpeed = cfg.predator.chaseSpeed;
+      this.profile.patrolSpeed = this._customSpeed !== undefined ? this._customSpeed : cfg.predator.patrolSpeed;
+      this.profile.chaseSpeed = this._customSpeed !== undefined ? this._customSpeed * 1.8 : cfg.predator.chaseSpeed;
       this.profile.detectionRadius = cfg.predator.detectionRadius;
       this.profile.attackRadius = cfg.predator.attackRadius;
+    }
+    if (this._customDamage !== undefined) {
+      this.profile.attackDamage = this._customDamage;
     }
 
     if (this.state.attackCooldown > 0) {
@@ -180,7 +211,7 @@ export class Predator {
 
         if (this.state.attackCooldown <= 0) {
           this.state.attackCooldown = this.profile.attackCooldownTime;
-          const dmg = this.profile.attackDamage;
+          const dmg = this.damage;
           nearestAnt.internalState.takeDamage(dmg, 'PREDATOR');
 
           if (eventBus) {

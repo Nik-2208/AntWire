@@ -6,6 +6,7 @@
 
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { AlertOctagon, RotateCcw, Monitor, RefreshCw, Terminal } from 'lucide-react';
+import { AntWireLogo } from './AntWireLogo';
 
 interface Props {
   children: ReactNode;
@@ -54,17 +55,20 @@ export class ErrorBoundary extends Component<Props, State> {
         <div className="w-screen h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-6 select-none font-sans">
           <div className="max-w-xl w-full bg-slate-900 border border-rose-500/60 rounded-3xl p-6 shadow-2xl backdrop-blur-xl flex flex-col gap-4">
             {/* Header */}
-            <div className="flex items-center gap-3 border-b border-slate-800 pb-3">
-              <div className="p-2.5 rounded-2xl bg-rose-950/80 border border-rose-500/50 text-rose-400">
-                <AlertOctagon className="w-6 h-6" />
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-3">
+                <AntWireLogo size="sm" showSubtitle={false} showBadge={false} glowEffect={false} />
+                <div>
+                  <h1 className="text-sm font-bold text-rose-400 font-heading tracking-wide uppercase">
+                    Diagnostic Recovery
+                  </h1>
+                  <p className="text-xs text-rose-300/80">
+                    A rendering exception occurred. The failsafe system prevented a blank screen.
+                  </p>
+                </div>
               </div>
-              <div>
-                <h1 className="text-lg font-bold text-slate-100 font-heading tracking-wide">
-                  ANTWIRE OBSERVATORY — DIAGNOSTIC RECOVERY
-                </h1>
-                <p className="text-xs text-rose-300">
-                  A rendering or component lifecycle exception occurred. The failsafe system prevented a blank screen.
-                </p>
+              <div className="p-2 rounded-xl bg-rose-950/80 border border-rose-500/40 text-rose-400">
+                <AlertOctagon className="w-5 h-5" />
               </div>
             </div>
 

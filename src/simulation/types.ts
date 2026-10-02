@@ -92,12 +92,15 @@ export type WorkerRole =
   | 'BROOD_CARE'
   | 'NEST_WORKER'
   | 'GARDENER'
+  | 'WASTE'
   | 'WASTE_WORKER'
   | 'RECRUITER'
   | 'SOLDIER'
   | 'GUARD'
   | 'EXPLORER'
   | 'RESERVE'
+  | 'SUPPORT'
+  | 'MAINTENANCE'
   | 'LEAF_CUTTER'
   | 'LEAF_PROCESSOR'
   | 'FUNGUS_GARDENER'
@@ -370,7 +373,9 @@ export type AntTask =
   | 'RESCUE_NESTMATE'
   | 'RECOVER'
   | 'TENDING_APHIDS'
-  | 'CULTIVATING_FUNGUS';
+  | 'CULTIVATING_FUNGUS'
+  | 'WAITING_FOR_TASK'
+  | 'PATROL';
 
 /**
  * Motor Action Types
@@ -407,13 +412,30 @@ export interface AntAction {
 }
 
 /**
- * Pheromone Field Channels
+ * Pheromone Field Channels & Types
+ * Distinct biological chemical communication signals
  */
 export enum PheromoneChannel {
-  FOOD_TRAIL = 0, // Recruits foragers toward discovered food sources
-  HOME_TRAIL = 1, // Deposited on outbound journeys to orient back toward nest
-  ALARM = 2,      // Emitted during predator or environmental threat encounters
-  RECRUITMENT = 3, // Group recruitment for defense or heavy load
+  FOOD = 0,        // Recruits foragers toward discovered food resources
+  FOOD_TRAIL = 0,  // Backward-compatible alias
+  HOME = 1,        // Deposited on outbound journeys to orient back toward nest
+  HOME_TRAIL = 1,  // Backward-compatible alias
+  RECRUITMENT = 2, // Group recruitment for defense, heavy transport, or nest emigration
+  DANGER = 3,      // Volatile chemical alarm emitted during predator or threat encounters
+  ALARM = 3,       // Backward-compatible alias
+  TASK = 4,        // Local stigmergic cue for excavation, brood care, or sanitation
+  EXPLORE = 5,     // Pioneer scout exploratory territory marking
+}
+
+export type PheromoneType = 'FOOD' | 'HOME' | 'RECRUITMENT' | 'DANGER' | 'TASK' | 'EXPLORE';
+
+export interface PheromoneDepositRecord {
+  antId: string;
+  type: PheromoneType | PheromoneChannel;
+  position: Vector2D;
+  strength: number;
+  timestamp: number;
+  decayRate?: number;
 }
 
 /**
@@ -432,6 +454,18 @@ export interface AntSensorySnapshot {
   alarmLeft: number;
   alarmCenter: number;
   alarmRight: number;
+
+  recruitmentLeft?: number;
+  recruitmentCenter?: number;
+  recruitmentRight?: number;
+
+  exploreLeft?: number;
+  exploreCenter?: number;
+  exploreRight?: number;
+
+  taskLeft?: number;
+  taskCenter?: number;
+  taskRight?: number;
 
   // Direct cues & gradients
   foodOdorConcentration: number;
@@ -637,6 +671,16 @@ export type ColonyStatus =
   | 'CRITICAL'
   | 'COLLAPSING'
   | 'RECOVERING';
+
+export type ColonyLifecyclePhase =
+  | 'FOUNDING'
+  | 'ESTABLISHING'
+  | 'FORAGING'
+  | 'GROWING'
+  | 'MAINTAINING'
+  | 'DEFENDING'
+  | 'RECOVERING'
+  | 'REORGANIZING';
 
 /**
  * Symbiosis & Ecological Interaction Model

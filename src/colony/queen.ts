@@ -26,6 +26,13 @@ export interface SpermathecaSpermBank {
   spermViability: number; // 0 to 1
 }
 
+export type QueenBehaviorState =
+  | 'REST'
+  | 'FEED'
+  | 'HEAL_RECOVER'
+  | 'REPRODUCE'
+  | 'MANAGE_INTERNAL_STATE';
+
 export interface QueenMetrics {
   id: string;
   name: string;
@@ -33,6 +40,7 @@ export interface QueenMetrics {
   health: number; // 0 to 1
   energy: number; // 0 to 1
   fertility: number; // 0 to 1
+  behaviorState: QueenBehaviorState;
   reproductiveState: ReproductiveState;
   eggLayingInterval: number; // seconds per egg cycle
   currentEggCycleProgress: number; // 0 to 1
@@ -42,6 +50,7 @@ export interface QueenMetrics {
   infrabuccalPelletMass: number; // fungal inoculum for founding (grams/units)
   trophicEggsLaid: number;
   position: Vector2D;
+  safeChamberPosition: Vector2D;
 }
 
 export class Queen {
@@ -49,7 +58,6 @@ export class Queen {
   private eggTimer: number = 0;
 
   constructor(colonyId: string, position: Vector2D = { x: -1.0, y: 4.0 }, isFoundress = false) {
-    // Default leafcutter queen with multiple mating patrilines
     const defaultPatrilines: DroneGeneticProfile[] = [
       { droneId: 'D-01', patrilineId: 'PAT-A', traitModifiers: { sizeTendency: 1.0, activityRate: 1.1, diseaseResistance: 1.0, foragingEfficiency: 1.2 } },
       { droneId: 'D-02', patrilineId: 'PAT-B', traitModifiers: { sizeTendency: 1.2, activityRate: 0.9, diseaseResistance: 1.3, foragingEfficiency: 1.0 } },
@@ -64,6 +72,7 @@ export class Queen {
       health: 1.0,
       energy: 1.0,
       fertility: 1.0,
+      behaviorState: 'REST',
       reproductiveState: isFoundress ? 'FOUNDRESS' : 'QUEEN',
       eggLayingInterval: 16.0,
       currentEggCycleProgress: 0,
@@ -79,6 +88,7 @@ export class Queen {
       infrabuccalPelletMass: isFoundress ? 2.5 : 0.0,
       trophicEggsLaid: 0,
       position: { ...position },
+      safeChamberPosition: { ...position },
     };
   }
 
@@ -102,9 +112,14 @@ export class Queen {
     return this.metrics.position;
   }
 
-  /**
-   * Execute Nuptial Flight & Mating with multiple drones (Polyandry)
-   */
+  public get behaviorState(): QueenBehaviorState {
+    return this.metrics.behaviorState;
+  }
+
+  public set behaviorState(state: QueenBehaviorState) {
+    this.metrics.behaviorState = state;
+  }
+
   public performNuptialFlight(drones: DroneGeneticProfile[], rng?: SeededRNG): void {
     const matedDrones = drones.length > 0 ? drones : [
       { droneId: `D-${Date.now().toString(36).slice(-3)}`, patrilineId: `PAT-${Math.random().toString(36).slice(-3)}`, traitModifiers: { sizeTendency: 1.0, activityRate: 1.0, diseaseResistance: 1.1, foragingEfficiency: 1.0 } }
@@ -114,15 +129,12 @@ export class Queen {
     this.metrics.spermatheca.patrilines = matedDrones;
     this.metrics.spermatheca.dronesMatedCount = matedDrones.length;
     this.metrics.spermatheca.totalSpermCount = matedDrones.length * 100;
-    this.metrics.infrabuccalPelletMass = 2.5; // Collected mycelium pellet from natal garden
+    this.metrics.infrabuccalPelletMass = 2.5;
   }
 
-  /**
-   * Sample random patriline genetic contribution for an oviposited egg
-   */
   public samplePatrilineForEgg(rng?: SeededRNG): DroneGeneticProfile | null {
     if (this.metrics.spermatheca.totalSpermCount <= 0 || this.metrics.spermatheca.patrilines.length === 0) {
-      return null; // Unfertilized haploid male egg
+      return null;
     }
 
     this.metrics.spermatheca.totalSpermCount = Math.max(0, this.metrics.spermatheca.totalSpermCount - 1);
@@ -132,18 +144,40 @@ export class Queen {
   }
 
   /**
-   * Queen update loop (metabolic burn, spermatheca viability, egg oviposition)
+   * Queen update loop (metabolic burn, behavior state machine, recovery, reproduction)
    */
   public update(dt: number, colonyFoodStore: number): { shouldLayEgg: boolean; foodConsumed: number; isTrophicEgg: boolean } {
     this.metrics.age += dt;
 
-    // Queen basal metabolic consumption
+    // Guaranteed safe position anchor: Queen never leaves the designated queen chamber
+    this.metrics.position.x = this.metrics.safeChamberPosition.x;
+    this.metrics.position.y = this.metrics.safeChamberPosition.y;
+
+    // Basal metabolic consumption
     const basalFoodBurn = 0.025 * dt;
     let foodConsumed = basalFoodBurn;
     let isTrophicEgg = false;
+    let shouldLayEgg = false;
 
+    // 1. BEHAVIOR STATE EVALUATION
+    if (this.metrics.health < 0.75) {
+      this.metrics.behaviorState = 'HEAL_RECOVER';
+      // Healing & Recovery phase
+      this.metrics.health = Math.min(1.0, this.metrics.health + 0.04 * dt);
+      this.metrics.energy = Math.max(0.1, this.metrics.energy - 0.01 * dt);
+    } else if (this.metrics.energy < 0.45 && colonyFoodStore > 0.5) {
+      this.metrics.behaviorState = 'FEED';
+      const feedAmount = Math.min(colonyFoodStore, 0.15 * dt);
+      foodConsumed += feedAmount;
+      this.metrics.energy = Math.min(1.0, this.metrics.energy + feedAmount * 2.0);
+    } else if (this.metrics.energy > 0.40 && colonyFoodStore > 1.0) {
+      this.metrics.behaviorState = 'REPRODUCE';
+    } else {
+      this.metrics.behaviorState = 'REST';
+    }
+
+    // 2. ENERGY & FERTILITY DYNAMICS
     if (colonyFoodStore < 1.0) {
-      // In claustral founding mode, foundress catabolizes wing muscles and somatic lipids
       this.metrics.energy = Math.max(0.05, this.metrics.energy - 0.015 * dt);
       this.metrics.fertility = Math.max(0.1, this.metrics.fertility - 0.02 * dt);
     } else {
@@ -151,11 +185,12 @@ export class Queen {
       this.metrics.fertility = Math.min(1.0, this.metrics.fertility + 0.05 * dt);
     }
 
-    // Egg-laying cycle rate modulated by fertility and nutrition
-    let shouldLayEgg = false;
+    // 3. EGG OVIPOSITION (Only when in REPRODUCE state, safe, and nourished)
     const isFoundressMode = this.metrics.reproductiveState === 'FOUNDRESS';
-
-    if ((this.metrics.energy > 0.3 && colonyFoodStore > 1.5) || (isFoundressMode && this.metrics.energy > 0.4)) {
+    if (
+      this.metrics.behaviorState === 'REPRODUCE' &&
+      ((this.metrics.energy > 0.3 && colonyFoodStore > 1.5) || (isFoundressMode && this.metrics.energy > 0.4))
+    ) {
       const cycleSpeed = (this.metrics.fertility * this.metrics.energy) / this.metrics.eggLayingInterval;
       this.eggTimer += dt * cycleSpeed;
       this.metrics.currentEggCycleProgress = Math.min(1.0, this.eggTimer);
@@ -171,7 +206,7 @@ export class Queen {
           this.metrics.trophicEggsLaid++;
         }
 
-        foodConsumed += isFoundressMode ? 0.0 : 1.2; // Somatic reserve vs colony food
+        foodConsumed += isFoundressMode ? 0.0 : 1.2;
       }
     }
 

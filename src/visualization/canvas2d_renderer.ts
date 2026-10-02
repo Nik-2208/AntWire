@@ -100,6 +100,16 @@ export class Canvas2DRenderer {
         }
       }
 
+      // Check click on predators
+      for (const pred of this.world.predators) {
+        const dx = pred.state.position.x - worldX;
+        const dy = pred.state.position.y - worldY;
+        if (Math.sqrt(dx * dx + dy * dy) <= pred.radius + 1.2) {
+          if (this.onSelectEntity) this.onSelectEntity('PREDATOR', pred.id);
+          return;
+        }
+      }
+
       // Check ground click
       if (this.onSelectEntity) {
         this.onSelectEntity('GROUND', undefined, { x: worldX, y: worldY });
@@ -454,29 +464,55 @@ export class Canvas2DRenderer {
 
     const foodCh = field.channels[0];
     const homeCh = field.channels[1];
-    const alarmCh = field.channels[2];
+    const recCh = field.channels[2];
+    const dangerCh = field.channels[3];
+    const taskCh = field.channels[4];
+    const exploreCh = field.channels[5];
 
-    for (let y = 0; y < res; y += 2) {
-      for (let x = 0; x < res; x += 2) {
+    for (let y = 0; y < res; y++) {
+      for (let x = 0; x < res; x++) {
         const idx = y * res + x;
-        const f = foodCh[idx] / field.config.maxConcentration;
-        const h = homeCh[idx] / field.config.maxConcentration;
-        const a = alarmCh[idx] / field.config.maxConcentration;
+        const fRaw = foodCh ? foodCh[idx] : 0;
+        const hRaw = homeCh ? homeCh[idx] : 0;
+        const rRaw = recCh ? recCh[idx] : 0;
+        const dRaw = dangerCh ? dangerCh[idx] : 0;
+        const tRaw = taskCh ? taskCh[idx] : 0;
+        const eRaw = exploreCh ? exploreCh[idx] : 0;
 
-        if (f < 0.02 && h < 0.02 && a < 0.02) continue;
+        if (fRaw < 0.005 && hRaw < 0.005 && rRaw < 0.005 && dRaw < 0.005 && tRaw < 0.005 && eRaw < 0.005) continue;
 
         const wx = (x / (res - 1)) * field.width - halfW;
         const wy = (y / (res - 1)) * field.height - halfH;
 
-        if (f > 0.05) {
-          ctx.fillStyle = `rgba(16, 185, 129, ${Math.min(0.7, f * 1.5)})`;
-          ctx.fillRect(wx, wy, cellSize * 2, cellSize * 2);
-        } else if (h > 0.05) {
-          ctx.fillStyle = `rgba(6, 182, 212, ${Math.min(0.5, h * 1.2)})`;
-          ctx.fillRect(wx, wy, cellSize * 2, cellSize * 2);
-        } else if (a > 0.05) {
-          ctx.fillStyle = `rgba(239, 68, 68, ${Math.min(0.8, a * 2.0)})`;
-          ctx.fillRect(wx, wy, cellSize * 2, cellSize * 2);
+        if (fRaw > 0.005) {
+          const alpha = Math.min(0.45, Math.pow(fRaw / 2.0, 0.7) * 0.4 + 0.08);
+          ctx.fillStyle = `rgba(16, 185, 110, ${alpha})`;
+          ctx.fillRect(wx - cellSize * 0.5, wy - cellSize * 0.5, cellSize * 1.5, cellSize * 1.5);
+        }
+        if (hRaw > 0.005) {
+          const alpha = Math.min(0.40, Math.pow(hRaw / 2.0, 0.7) * 0.35 + 0.06);
+          ctx.fillStyle = `rgba(6, 160, 205, ${alpha})`;
+          ctx.fillRect(wx - cellSize * 0.5, wy - cellSize * 0.5, cellSize * 1.5, cellSize * 1.5);
+        }
+        if (rRaw > 0.005) {
+          const alpha = Math.min(0.45, Math.pow(rRaw / 2.0, 0.7) * 0.4 + 0.08);
+          ctx.fillStyle = `rgba(210, 140, 20, ${alpha})`;
+          ctx.fillRect(wx - cellSize * 0.5, wy - cellSize * 0.5, cellSize * 1.5, cellSize * 1.5);
+        }
+        if (dRaw > 0.005) {
+          const alpha = Math.min(0.50, Math.pow(dRaw / 1.5, 0.7) * 0.45 + 0.1);
+          ctx.fillStyle = `rgba(200, 40, 60, ${alpha})`;
+          ctx.fillRect(wx - cellSize * 0.5, wy - cellSize * 0.5, cellSize * 1.5, cellSize * 1.5);
+        }
+        if (tRaw > 0.005) {
+          const alpha = Math.min(0.40, Math.pow(tRaw / 2.0, 0.7) * 0.35 + 0.06);
+          ctx.fillStyle = `rgba(140, 70, 210, ${alpha})`;
+          ctx.fillRect(wx - cellSize * 0.5, wy - cellSize * 0.5, cellSize * 1.5, cellSize * 1.5);
+        }
+        if (eRaw > 0.005) {
+          const alpha = Math.min(0.35, Math.pow(eRaw / 2.0, 0.7) * 0.3 + 0.05);
+          ctx.fillStyle = `rgba(45, 150, 200, ${alpha})`;
+          ctx.fillRect(wx - cellSize * 0.5, wy - cellSize * 0.5, cellSize * 1.5, cellSize * 1.5);
         }
       }
     }

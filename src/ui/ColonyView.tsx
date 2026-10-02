@@ -8,6 +8,7 @@
 import React, { useState } from 'react';
 import { SimulationWorld } from '../simulation/world';
 import { ScientificBadge } from './ScientificBadge';
+import { AntWireLogo } from './AntWireLogo';
 import { BiologyInfoPopup } from './BiologyInfoPopup';
 import { ColonyControlMode } from '../simulation/types';
 import {
@@ -97,8 +98,8 @@ export const ColonyView: React.FC<ColonyViewProps> = ({ world, onSelectAnt, onFo
     <div className="flex flex-col gap-3 p-4 bg-slate-900/90 border border-slate-800 rounded-2xl text-slate-200 text-xs shadow-xl backdrop-blur-md overflow-y-auto max-h-[85vh]">
       {/* Title & Mode Switcher */}
       <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
-        <div className="flex items-center gap-2">
-          <Users className="w-5 h-5 text-cyan-400" />
+        <div className="flex items-center gap-3">
+          <AntWireLogo size="sm" showSubtitle={false} showBadge={false} glowEffect={false} />
           <div>
             <h2 className="text-sm font-bold font-heading text-slate-100">COLONY SUPERORGANISM LAB</h2>
             <p className="text-[10px] text-slate-400">

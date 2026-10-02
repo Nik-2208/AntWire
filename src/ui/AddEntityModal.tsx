@@ -9,6 +9,7 @@ import { AntCaste, AntTask, Vector2D } from '../simulation/types';
 import { SPECIES_REGISTRY, SpeciesProfile } from '../colony/species_profiles';
 import { SimulationWorld } from '../simulation/world';
 import { ScientificBadge } from './ScientificBadge';
+import { AntWireLogo } from './AntWireLogo';
 import { X, Plus, Sparkles, Shield, Compass, HeartPulse, Zap, AlertCircle } from 'lucide-react';
 
 interface AddEntityModalProps {
@@ -77,8 +78,8 @@ export const AddEntityModal: React.FC<AddEntityModalProps> = ({
       <div className="bg-slate-900 border border-slate-700/80 rounded-3xl max-w-lg w-full p-5 shadow-2xl flex flex-col gap-4 text-slate-100 text-xs">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-          <div className="flex items-center gap-2">
-            <Plus className="w-5 h-5 text-cyan-400" />
+          <div className="flex items-center gap-3">
+            <AntWireLogo size="sm" showSubtitle={false} showBadge={false} glowEffect={false} />
             <h2 className="text-base font-bold font-heading text-slate-100">ADD SIMULATION ENTITY</h2>
           </div>
           <button

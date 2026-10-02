@@ -23,6 +23,16 @@ import { AuthoritativeRewardEngine } from '../simulation/authoritative_reward_en
 import { AntSpeciesProfile, DEFAULT_SPECIES_PROFILE } from './species_profile';
 import { AntPheromoneDecisionState, PheromoneDecisionEngine } from './pheromone_decision';
 import { NeuromodulatorSystem } from '../learning/neuromodulation';
+import { AntHomingSystem } from './homing';
+
+export interface ExperienceStep {
+  observation: number[];
+  action: number[];
+  reward: number;
+  nextObservation: number[];
+  done: boolean;
+  timestamp: number;
+}
 
 export class Ant {
   public id: string;
@@ -38,6 +48,12 @@ export class Ant {
   public speciesProfile: AntSpeciesProfile;
   public pheromoneState: AntPheromoneDecisionState;
   public readonly neuromodulator: NeuromodulatorSystem;
+  public homingSystem: AntHomingSystem;
+
+  // Independent Experience & Training Buffer (No shared state across ants)
+  public experienceBuffer: ExperienceStep[] = [];
+  public maxExperienceBuffer: number = 100;
+  public combatCooldown: number = 0;
 
   // History & telemetry buffers
   public lastAction: AntAction;
@@ -64,9 +80,9 @@ export class Ant {
     this.drives = new AntMotivationalDrives();
     this.memory = new AntMemory();
     this.controller = controller || new BiologicalBrainController(id);
-    this.taskSystem = new TaskSystem('EXPLORING', 0, initialPos);
+    this.taskSystem = new TaskSystem('IDLE', 0, initialPos);
     this.roleState = {
-      primaryRole: caste === 'QUEEN' ? 'REPRODUCTIVE' : primaryRole,
+      primaryRole: caste === 'QUEEN' ? 'QUEEN' : primaryRole,
       roleDuration: 0,
       roleSwitchCooldown: 0,
       minimumRoleDuration: 20.0,
@@ -74,8 +90,62 @@ export class Ant {
     this.speciesProfile = speciesProfile || DEFAULT_SPECIES_PROFILE;
     this.pheromoneState = PheromoneDecisionEngine.createDefaultState(this.speciesProfile);
     this.neuromodulator = new NeuromodulatorSystem();
+    this.homingSystem = new AntHomingSystem();
 
     this.lastAction = { type: 'STOP' };
+  }
+
+  public get role(): WorkerRole {
+    return this.roleState.primaryRole;
+  }
+
+  public set role(r: WorkerRole) {
+    this.roleState.primaryRole = r;
+  }
+
+  public get lifecycle(): string {
+    return this.taskSystem.state.lifecycleState;
+  }
+
+  public updateCombatCooldown(dt: number): void {
+    this.combatCooldown = Math.max(0, this.combatCooldown - dt);
+  }
+
+  public canAttack(): boolean {
+    return this.combatCooldown <= 0;
+  }
+
+  public performAttack(predator: { state: { health: number; position: Vector2D } }, damage: number = 10): boolean {
+    if (!this.canAttack() || predator.state.health <= 0) {
+      return false;
+    }
+    predator.state.health = Math.max(0, predator.state.health - damage);
+    this.combatCooldown = 0.5; // Enforce combat cooldown to prevent per-frame repeated hits
+    return true;
+  }
+
+  /**
+   * Records an independent self-contained experience step for policy training
+   */
+  public stepExperience(
+    observation: number[],
+    action: number[],
+    reward: number,
+    nextObservation: number[],
+    done: boolean,
+    timestamp: number = 0
+  ): void {
+    this.experienceBuffer.push({
+      observation,
+      action,
+      reward,
+      nextObservation,
+      done,
+      timestamp,
+    });
+    if (this.experienceBuffer.length > this.maxExperienceBuffer) {
+      this.experienceBuffer.shift();
+    }
   }
 
   /**
@@ -120,6 +190,30 @@ export class Ant {
       nearbyAnts
     );
 
+    // 1.1 COMBAT COOLDOWN UPDATE
+    this.combatCooldown = Math.max(0, this.combatCooldown - dt);
+
+    // 1.2 HOMING SYSTEM UPDATE
+    const homingStatus = this.homingSystem.update(
+      dt,
+      this.body.position,
+      this.body.heading,
+      sensorySnapshot,
+      this.internalState.state.carryingFoodAmount > 0 || this.taskSystem.state.carryingMaterialAmount > 0,
+      this.internalState.energy,
+      this.internalState.health < 0.6,
+      nestEntrance,
+      nestRadius
+    );
+
+    // If homing system recommends return and ant is not already returning, steer homeward
+    if (homingStatus.shouldReturnHome && this.internalState.state.carryingFoodAmount > 0) {
+      if (this.taskSystem.state.currentTask !== 'RETURNING_TO_NEST' && this.taskSystem.state.currentTask !== 'RETURN_HOME') {
+        this.taskSystem.setTask('RETURNING_TO_NEST', simTime, 'HIGH', 40.0);
+        this.body.task = 'RETURNING_TO_NEST';
+      }
+    }
+
     // 1.5 COMMUNICATION BUS MESSAGING (In-Flight Delivery & Outbox)
     if (communicationBus) {
       const incoming = communicationBus.getMessagesForAnt(
@@ -132,11 +226,21 @@ export class Ant {
         if (msg.type === 'DANGER' && msg.location) {
           this.internalState.state.threatLevel = Math.max(this.internalState.state.threatLevel, 0.85);
           this.memory.rememberThreat(msg.location);
-        } else if (msg.type === 'RESOURCE_FOUND' && msg.location) {
-          this.memory.rememberFood(msg.location);
-          if (this.taskSystem.state.currentTask === 'EXPLORING' || this.taskSystem.state.currentTask === 'IDLE') {
-            this.taskSystem.state.currentTask = 'SEEK_FOOD';
-            this.taskSystem.state.targetPosition = { ...msg.location };
+        } else if (msg.type === 'RESOURCE_FOUND') {
+          const foodLoc = msg.location || (msg.payload?.location as any);
+          if (foodLoc) {
+            this.memory.rememberFood(foodLoc);
+            const task = this.taskSystem.state.currentTask;
+            if (
+              (task === 'EXPLORING' || task === 'IDLE' || task === 'IDLE_REASSESS' || task === 'FORAGING') &&
+              this.internalState.state.carryingFoodAmount <= 0 &&
+              this.taskSystem.state.reassessmentCooldown <= 0
+            ) {
+              this.taskSystem.state.currentTask = 'SEEK_FOOD';
+              this.taskSystem.state.targetPosition = { ...foodLoc };
+              this.taskSystem.state.taskTimeout = 25.0;
+              this.taskSystem.state.taskDuration = 0;
+            }
           }
         } else if (msg.type === 'RECRUIT_REQUEST' && msg.payload?.taskId && collaborativeTasks) {
           if (this.taskSystem.state.currentTask === 'EXPLORING' || this.taskSystem.state.currentTask === 'IDLE') {
@@ -145,18 +249,20 @@ export class Ant {
         }
       }
 
-      // Outgoing discovery communication
-      if (sensorySnapshot.foodOdorConcentration > 0.65 && sensorySnapshot.detectedFoodId) {
-        communicationBus.postMessage(
-          this.id,
-          'BROADCAST',
-          'RESOURCE_FOUND',
-          { foodId: sensorySnapshot.detectedFoodId },
-          simTime,
-          this.body.position,
-          4.0,
-          0.9
-        );
+      // Outgoing: broadcast food location to nearby nestmates when smelling strong food odor
+      if (sensorySnapshot.foodOdorConcentration > 0.45 && sensorySnapshot.detectedFoodId) {
+        if (this.internalState.state.carryingFoodAmount <= 0) {
+          communicationBus.postMessage(
+            this.id,
+            'BROADCAST',
+            'RESOURCE_FOUND',
+            { foodId: sensorySnapshot.detectedFoodId, location: this.body.position },
+            simTime,
+            this.body.position,
+            5.0,
+            0.8
+          );
+        }
       }
 
       if (sensorySnapshot.predatorDetected) {
@@ -259,6 +365,7 @@ export class Ant {
     // 6. POLICY DECISION EXECUTION WITH ROBUST FAILURE ISOLATION
     let actionToExecute: AntAction = { type: 'STOP' };
     let decisionRecord: DecisionRecord;
+    const oldPos = { ...this.body.position };
 
     try {
       if (taskResult.actionOverride) {
@@ -303,8 +410,35 @@ export class Ant {
 
       // 7. MOTOR & BEHAVIORAL INTERVENTIONS
       this.executeAction(actionToExecute, dt, pheromones, foodEntities, nestEntrance, nestRadius, config, eventBus, simTime, activeColonyNeeds);
+
+      // 7.5 RECORD SELF-CONTAINED TRAINABLE EXPERIENCE STEP
+      const obsVector = [
+        sensorySnapshot.foodCenter,
+        sensorySnapshot.foodLeft,
+        sensorySnapshot.foodRight,
+        sensorySnapshot.homeCenter,
+        sensorySnapshot.homeLeft,
+        sensorySnapshot.homeRight,
+        sensorySnapshot.alarmCenter,
+        sensorySnapshot.predatorProximity,
+        this.internalState.energy,
+        this.internalState.health,
+        this.internalState.state.carryingFoodAmount,
+        this.body.speed / 5.0,
+      ];
+      const actionVector = [
+        actionToExecute.speedMultiplier ?? 1.0,
+        (actionToExecute.turnAngle ?? 0) / Math.PI,
+      ];
+      this.stepExperience(
+        obsVector,
+        actionVector,
+        decisionRecord.confidence,
+        obsVector,
+        !this.internalState.state.isAlive,
+        simTime
+      );
     } catch (err: any) {
-      // Individual ant inference failure isolation: isolate to RECOVERING state without terminating colony
       console.warn(`[AntWire Failure Isolation] Ant ${this.id} encountered an inference/action error:`, err?.message || err);
       this.taskSystem.setTask('RECOVER', simTime, 'HIGH', 10.0);
       this.taskSystem.transitionLifecycle('RECOVERING', this.id);
@@ -323,7 +457,12 @@ export class Ant {
       }
     }
 
-    // 8. BOUNDARY CONSTRAINTS
+    // 8. UPDATE HOMING SYSTEM PATH INTEGRATION
+    const dx = this.body.position.x - oldPos.x;
+    const dy = this.body.position.y - oldPos.y;
+    this.homingSystem.updateMotion(dx, dy, sensorySnapshot.isAtNestEntrance, nestEntrance, this.body.position);
+
+    // 9. BOUNDARY CONSTRAINTS
     this.body.clampToWorld(worldHalfW, worldHalfH);
   }
 
@@ -361,12 +500,15 @@ export class Ant {
     );
 
     if (pheroDecision.shouldDeposit && pheroDecision.channel !== undefined && pheroDecision.strength > 0) {
-      pheromones.deposit(
-        this.body.position.x,
-        this.body.position.y,
-        pheroDecision.channel,
-        pheroDecision.strength * dt * 5.0
-      );
+      const depScale = (config?.pheromones?.depositionAmount ?? 1.2) * 10.0;
+      pheromones.deposit({
+        antId: this.id,
+        type: pheroDecision.channel,
+        position: { x: this.body.position.x, y: this.body.position.y },
+        strength: pheroDecision.strength * dt * depScale,
+        timestamp: simTime,
+        decayRate: pheroDecision.decayRate,
+      });
     }
 
     // Specific discrete action behaviors
@@ -436,7 +578,6 @@ export class Ant {
                 }
               }
             } else {
-              // Not yet close enough: steer toward food at normal speed rather than stopping!
               const headingToFood = Math.atan2(dy, dx);
               let angleDiff = headingToFood - this.body.heading;
               while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
@@ -444,7 +585,6 @@ export class Ant {
               this.body.updateMotion(dt, 1.0, angleDiff * 0.8);
             }
           } else {
-            // Food is depleted or invalid!
             this.taskSystem.invalidateTarget();
             this.taskSystem.setTask('EXPLORING', simTime, 'LOW', 15.0);
             this.body.task = 'EXPLORING';
@@ -459,7 +599,6 @@ export class Ant {
           this.body.position.y - nestEntrance.y
         );
         if (distToNest <= nestRadius + 0.8 && this.internalState.state.carryingFoodAmount > 0) {
-          // Food is deposited and handled by Colony.update loop for strict conservation
           const rewardEvent = AuthoritativeRewardEngine.getInstance().emitReward(
             this.id,
             'COMPLETION',
@@ -493,6 +632,11 @@ export class Ant {
         break;
       }
 
+      case 'ATTACK': {
+        this.body.task = 'DEFENDING';
+        break;
+      }
+
       case 'MOVE_FORWARD': {
         if (this.internalState.state.carryingFoodAmount > 0) {
           this.body.task = 'RETURNING_TO_NEST';
@@ -508,6 +652,20 @@ export class Ant {
   public getFullOrganismSnapshot() {
     return {
       id: this.id,
+      lifecycle: this.taskSystem.state.lifecycleState || this.taskSystem.state.currentTask,
+      role: this.roleState.primaryRole,
+      task: this.taskSystem.state.currentTask,
+      goal: this.taskSystem.state.taskPriority,
+      observation: this.sensors.lastSnapshot,
+      homeEstimate: this.homingSystem.getSnapshot().estimatedHomeVector,
+      direction: this.body.heading,
+      pheromoneInput: this.pheromoneState,
+      communication: this.internalState.state.helpRequested,
+      internalState: this.internalState.state,
+      decisionFactors: (this.latestDecision as any)?.decisionFactors || [],
+      action: this.lastAction,
+      reward: this.latestDecision?.confidence || 0,
+      experienceStepsCount: this.experienceBuffer.length,
       brain: this.controller,
       memory: this.memory,
       learning: this.neuromodulator,
@@ -516,18 +674,20 @@ export class Ant {
       health: this.internalState.health,
       hunger: this.internalState.hunger,
       age: this.internalState.state.age,
-      role: this.roleState.primaryRole,
-      task: this.taskSystem.state.currentTask,
       target: this.taskSystem.state.targetPosition,
+      homing: this.homingSystem.getSnapshot(),
       navigation: {
         lastKnownFoodPosition: this.memory.lastKnownFoodPosition,
         lastKnownThreatPosition: this.memory.lastKnownThreatPosition,
         breadcrumbsCount: this.memory.recentBreadcrumbs.length,
+        homeEstimate: this.homingSystem.getSnapshot().estimatedHomeVector,
+        homingState: this.homingSystem.state,
       },
       sensoryState: this.sensors.lastSnapshot,
       motorState: this.lastAction,
       rewardState: {
         lastReward: this.latestDecision?.confidence || 0,
+        experienceCount: this.experienceBuffer.length,
       },
       communicationState: {
         helpRequested: this.internalState.state.helpRequested,
