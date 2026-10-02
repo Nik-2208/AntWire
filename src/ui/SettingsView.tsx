@@ -238,7 +238,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 ))}
               </div>
               <p className="text-[10px] text-slate-400">
-                {quality === 'LOW' && 'Optimized for Intel i5 10th Gen / GT 610 (1.0 pixel ratio, unlit shaders, connection thinning).'}
+                {quality === 'LOW' && 'Optimized for low-end PCs (1.0 pixel ratio, unlit shaders, connection thinning).'}
                 {quality === 'MEDIUM' && 'Balanced rendering with directional keylights and ant limb articulation.'}
                 {quality === 'HIGH' && 'High fidelity with full lighting, dynamic shadows, and 60fps signal pulses.'}
               </p>
